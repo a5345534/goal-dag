@@ -1,0 +1,59 @@
+{
+  "name": "agent-goal-planner",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Plan Goal DAG files from development documents for the agent-goal-runtime.",
+  "keywords": [
+    "pi-package",
+    "agent-goal-planner",
+    "agent-goal-runtime",
+    "goal-dag"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./skills": "./skills"
+  },
+  "bin": {
+    "agent-goal-planner": "./dist/scripts/build-dag.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "schemas",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/tests/*.test.js",
+    "check": "npm run build && npm test",
+    "prepack": "npm run build"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a5345534/agent-goal-planner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/a5345534/agent-goal-planner/issues"
+  },
+  "homepage": "https://github.com/a5345534/agent-goal-planner#readme",
+  "dependencies": {
+    "agent-goal-runtime": "file:../agent-goal-runtime"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
