@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildGoalDagFromSpec,
   buildGoalDagFromSpecFile,
@@ -12,6 +14,9 @@ import {
   validateGoalDagJson,
   type GoalDagSpec,
 } from "../index.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI_PATH = resolve(HERE, "..", "scripts", "build-dag.js");
 
 const baseSpec: GoalDagSpec = {
   objective: "Complete People Frappe backend remaining slices",
@@ -149,6 +154,33 @@ test("buildGoalDagFromSpecFile refuses to write an invalid spec", () => {
       "utf8",
     );
     assert.throws(() => buildGoalDagFromSpecFile(specPath, outPath), /kebab-case/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("build-dag CLI accepts the build-dag subcommand", () => {
+  // Spawn the compiled CLI the way a shell or Pi would invoke it, and
+  // confirm the subcommand is consumed before flag parsing runs.
+  const dir = mkdtempSync(join(tmpdir(), "agent-goal-planner-"));
+  try {
+    const specPath = join(dir, "spec.json");
+    const outPath = join(dir, "out.dag.json");
+    writeFileSync(
+      specPath,
+      JSON.stringify({
+        objective: "x",
+        nodes: [{ id: "a", objective: "a" }],
+      }),
+      "utf8",
+    );
+    const result = spawnSync(
+      process.execPath,
+      [CLI_PATH, "build-dag", "--spec", specPath, "--out", outPath],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, `cli failed: ${result.stderr}`);
+    assert.match(result.stdout, /Wrote Goal DAG file/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

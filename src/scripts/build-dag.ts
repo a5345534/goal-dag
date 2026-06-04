@@ -26,6 +26,9 @@ function printUsage(): void {
 
 function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = { spec: "", out: "", help: false };
+  // Consume the leading subcommand if present. Today we only ship one
+  // subcommand, so the parser just accepts and ignores it.
+  if (argv[0] === "build-dag") argv = argv.slice(1);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
