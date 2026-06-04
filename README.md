@@ -107,6 +107,10 @@ The skill walks the agent through:
 
 ## Architecture
 
+See [`docs/architecture-decision.md`](docs/architecture-decision.md) for
+the rationale behind splitting this planner out of `agent-goal-runtime`
+and the runtime API surface the planner depends on.
+
 ```
 ┌────────────────────────────────────────┐
 │  agent-goal-runtime                    │

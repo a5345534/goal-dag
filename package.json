@@ -25,6 +25,7 @@
     "dist",
     "skills",
     "schemas",
+    "docs",
     "README.md"
   ],
   "scripts": {
