@@ -30,6 +30,12 @@ export function parseGoalDagSpecDocument(input) {
     if (record.version !== undefined && record.version !== 1) {
         throw new Error("Invalid goal DAG spec: version must be 1 when present");
     }
+    if (record.defaults && typeof record.defaults === "object" && !Array.isArray(record.defaults)) {
+        const risk = record.defaults.risk;
+        if (risk !== undefined && risk !== "low" && risk !== "medium" && risk !== "high") {
+            throw new Error(`Invalid goal DAG spec: defaults.risk must be one of low, medium, high (got ${JSON.stringify(risk)})`);
+        }
+    }
     return record;
 }
 /**
@@ -41,14 +47,35 @@ export function parseGoalDagSpecDocument(input) {
  * source of truth for id pattern, dependency existence, self-dependency,
  * cycle, and model-scenario referential-integrity rules. A failure
  * surfaces as a thrown error before the caller writes the file.
+ *
+ * Defaults handling: `spec.defaults.risk` is planner-only (the runtime
+ * schema does not allow `risk` in defaults), so we propagate it onto
+ * every node that does not set its own `risk` and strip it from the
+ * emitted defaults. All other `spec.defaults` fields pass through
+ * unchanged.
  */
 export function buildGoalDagFromSpec(spec) {
+    const specDefaults = spec.defaults;
+    const defaultRisk = specDefaults?.risk;
+    // Runtime defaults (without the planner-only `risk` field).
+    const runtimeDefaults = specDefaults
+        ? cloneDefaults({
+            outputs: specDefaults.outputs,
+            validators: specDefaults.validators,
+            workspaceStrategy: specDefaults.workspaceStrategy,
+            completionGates: specDefaults.completionGates,
+            conflicts: specDefaults.conflicts,
+            modelScenario: specDefaults.modelScenario,
+        })
+        : undefined;
     const draft = {
         version: spec.version ?? 1,
         objective: spec.objective,
-        ...(spec.defaults ? { defaults: cloneDefaults(spec.defaults) } : {}),
+        ...(runtimeDefaults && hasRuntimeDefaultContent(runtimeDefaults)
+            ? { defaults: runtimeDefaults }
+            : {}),
         ...(spec.modelRouting ? { modelRouting: cloneModelRouting(spec.modelRouting) } : {}),
-        nodes: spec.nodes.map(cloneNode),
+        nodes: spec.nodes.map((node) => cloneNode(node, defaultRisk)),
     };
     return parseGoalDagFileDocument(draft);
 }
@@ -78,7 +105,7 @@ export function serializeGoalDagDocument(document, options = {}) {
 export function validateGoalDagJson(content) {
     return parseGoalDagFileDocument(JSON.parse(content));
 }
-function cloneNode(node) {
+function cloneNode(node, defaultRisk) {
     const out = {
         id: node.id,
         objective: node.objective,
@@ -97,11 +124,21 @@ function cloneNode(node) {
         out.workspaceStrategy = node.workspaceStrategy;
     if (node.risk !== undefined)
         out.risk = node.risk;
+    else if (defaultRisk !== undefined)
+        out.risk = defaultRisk;
     if (node.completionGates)
         out.completionGates = [...node.completionGates];
     if (node.modelScenario !== undefined)
         out.modelScenario = node.modelScenario;
     return out;
+}
+function hasRuntimeDefaultContent(defaults) {
+    return (defaults.outputs !== undefined ||
+        defaults.validators !== undefined ||
+        defaults.workspaceStrategy !== undefined ||
+        defaults.completionGates !== undefined ||
+        defaults.conflicts !== undefined ||
+        defaults.modelScenario !== undefined);
 }
 function cloneDefaults(defaults) {
     const out = {};

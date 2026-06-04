@@ -10,6 +10,7 @@ export {
 export type {
   GoalDagSpec,
   GoalDagSpecNode,
+  GoalDagSpecDefaults,
   GoalDagFileDocument,
   GoalDagFileNode,
   GoalDagFileDefaults,

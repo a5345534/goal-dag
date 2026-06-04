@@ -113,6 +113,125 @@ test("buildGoalDagFromSpecFile refuses to write an invalid spec", () => {
         rmSync(dir, { recursive: true, force: true });
     }
 });
+test("buildGoalDagFromSpec flattens defaults.risk onto every node that omits risk", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        defaults: { risk: "high" },
+        nodes: [
+            { id: "a", objective: "a" },
+            { id: "b", objective: "b" },
+            { id: "c", objective: "c" },
+        ],
+    });
+    // The runtime's GoalDagFileDefaults type does not include `risk`, so the
+    // planner-only `risk` is guaranteed to be absent at the type level. The
+    // test below also runtime-checks the value to defend against future
+    // type drift.
+    assert.equal(document.defaults?.risk, undefined, "planner-only risk must be stripped from defaults");
+    for (const node of document.nodes) {
+        assert.equal(node.risk, "high", `${node.id} should inherit risk=high from defaults`);
+    }
+});
+test("buildGoalDagFromSpec lets a per-node risk override defaults.risk", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        defaults: { risk: "high" },
+        nodes: [
+            { id: "a", objective: "a" },
+            { id: "b", objective: "b", risk: "low" },
+            { id: "c", objective: "c" },
+        ],
+    });
+    assert.equal(document.nodes[0]?.risk, "high");
+    assert.equal(document.nodes[1]?.risk, "low");
+    assert.equal(document.nodes[2]?.risk, "high");
+});
+test("buildGoalDagFromSpec omits risk on every node when neither default nor node sets it", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        nodes: [
+            { id: "a", objective: "a" },
+            { id: "b", objective: "b" },
+        ],
+    });
+    for (const node of document.nodes) {
+        assert.equal(node.risk, undefined);
+    }
+});
+test("buildGoalDagFromSpec keeps non-risk defaults fields intact when flattening risk", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        defaults: {
+            risk: "high",
+            completionGates: ["controller-validation", "human-confirmation"],
+            validators: ["npm test"],
+        },
+        nodes: [{ id: "a", objective: "a" }],
+    });
+    assert.deepEqual(document.defaults?.completionGates, [
+        "controller-validation",
+        "human-confirmation",
+    ]);
+    assert.deepEqual(document.defaults?.validators, ["npm test"]);
+    assert.equal(document.defaults?.risk, undefined, "planner-only risk must be stripped");
+    assert.equal(document.nodes[0]?.risk, "high");
+});
+test("buildGoalDagFromSpec preserves the user's actual common-module audit use case", () => {
+    // Mirrors the real follow-up-plan.spec.json: defaults.risk=high, 11
+    // nodes inherit, 1 node overrides with risk=low.
+    const document = buildGoalDagFromSpec({
+        objective: "common-module boundaries",
+        defaults: {
+            risk: "high",
+            completionGates: ["controller-validation", "human-confirmation"],
+        },
+        nodes: [
+            { id: "move-a", objective: "a" },
+            { id: "move-b", objective: "b" },
+            { id: "move-c", objective: "c" },
+            { id: "move-d", objective: "d" },
+            { id: "move-e", objective: "e" },
+            { id: "move-f", objective: "f" },
+            { id: "move-g", objective: "g" },
+            { id: "move-h", objective: "h" },
+            { id: "spec-a", objective: "a" },
+            { id: "spec-b", objective: "b" },
+            { id: "lint-hook", objective: "a" },
+            {
+                id: "final-audit",
+                objective: "audit",
+                after: ["move-a", "move-b", "move-c", "move-d", "move-e", "move-f", "move-g", "move-h"],
+                risk: "low",
+            },
+        ],
+    });
+    assert.equal(document.defaults?.risk, undefined);
+    for (const node of document.nodes) {
+        if (node.id === "final-audit") {
+            assert.equal(node.risk, "low");
+        }
+        else {
+            assert.equal(node.risk, "high", `${node.id} should inherit risk=high`);
+        }
+    }
+});
+test("parseGoalDagSpecDocument rejects invalid defaults.risk values", () => {
+    assert.throws(() => parseGoalDagSpecDocument({
+        objective: "x",
+        defaults: { risk: "huge" },
+        nodes: [{ id: "a", objective: "a" }],
+    }), /defaults.risk must be one of low, medium, high/);
+});
+test("parseGoalDagSpecDocument accepts valid defaults.risk values", () => {
+    for (const risk of ["low", "medium", "high"]) {
+        const spec = parseGoalDagSpecDocument({
+            objective: "x",
+            defaults: { risk },
+            nodes: [{ id: "a", objective: "a" }],
+        });
+        assert.equal(spec.defaults?.risk, risk);
+    }
+});
 test("build-dag CLI accepts the build-dag subcommand", () => {
     // Spawn the compiled CLI the way a shell or Pi would invoke it, and
     // confirm the subcommand is consumed before flag parsing runs.

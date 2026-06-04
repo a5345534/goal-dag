@@ -21,11 +21,23 @@ export interface GoalDagSpecNode {
     completionGates?: string[];
     modelScenario?: string;
 }
+/**
+ * Planner-side defaults.
+ *
+ * Accepts everything the runtime's on-disk {@link GoalDagFileDefaults}
+ * accepts, plus `risk`. The planner flattens `risk` into each node that
+ * does not set its own `risk` during {@link buildGoalDagFromSpec}, then
+ * strips it from the emitted defaults so the resulting DAG file matches
+ * the runtime's on-disk schema.
+ */
+export interface GoalDagSpecDefaults extends GoalDagFileDefaults {
+    risk?: GoalDagNode["risk"];
+}
 export interface GoalDagSpec {
     /** Optional file-format version. Defaults to `1`. */
     version?: 1;
     objective: string;
-    defaults?: GoalDagFileDefaults;
+    defaults?: GoalDagSpecDefaults;
     modelRouting?: GoalModelRoutingConfig;
     nodes: GoalDagSpecNode[];
 }
@@ -46,6 +58,12 @@ export declare function parseGoalDagSpecDocument(input: unknown): GoalDagSpec;
  * source of truth for id pattern, dependency existence, self-dependency,
  * cycle, and model-scenario referential-integrity rules. A failure
  * surfaces as a thrown error before the caller writes the file.
+ *
+ * Defaults handling: `spec.defaults.risk` is planner-only (the runtime
+ * schema does not allow `risk` in defaults), so we propagate it onto
+ * every node that does not set its own `risk` and strip it from the
+ * emitted defaults. All other `spec.defaults` fields pass through
+ * unchanged.
  */
 export declare function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocument;
 /**

@@ -32,11 +32,24 @@ export interface GoalDagSpecNode {
   modelScenario?: string;
 }
 
+/**
+ * Planner-side defaults.
+ *
+ * Accepts everything the runtime's on-disk {@link GoalDagFileDefaults}
+ * accepts, plus `risk`. The planner flattens `risk` into each node that
+ * does not set its own `risk` during {@link buildGoalDagFromSpec}, then
+ * strips it from the emitted defaults so the resulting DAG file matches
+ * the runtime's on-disk schema.
+ */
+export interface GoalDagSpecDefaults extends GoalDagFileDefaults {
+  risk?: GoalDagNode["risk"];
+}
+
 export interface GoalDagSpec {
   /** Optional file-format version. Defaults to `1`. */
   version?: 1;
   objective: string;
-  defaults?: GoalDagFileDefaults;
+  defaults?: GoalDagSpecDefaults;
   modelRouting?: GoalModelRoutingConfig;
   nodes: GoalDagSpecNode[];
 }
@@ -73,6 +86,14 @@ export function parseGoalDagSpecDocument(input: unknown): GoalDagSpec {
   if (record.version !== undefined && record.version !== 1) {
     throw new Error("Invalid goal DAG spec: version must be 1 when present");
   }
+  if (record.defaults && typeof record.defaults === "object" && !Array.isArray(record.defaults)) {
+    const risk = (record.defaults as Record<string, unknown>).risk;
+    if (risk !== undefined && risk !== "low" && risk !== "medium" && risk !== "high") {
+      throw new Error(
+        `Invalid goal DAG spec: defaults.risk must be one of low, medium, high (got ${JSON.stringify(risk)})`,
+      );
+    }
+  }
   return record as unknown as GoalDagSpec;
 }
 
@@ -85,14 +106,36 @@ export function parseGoalDagSpecDocument(input: unknown): GoalDagSpec {
  * source of truth for id pattern, dependency existence, self-dependency,
  * cycle, and model-scenario referential-integrity rules. A failure
  * surfaces as a thrown error before the caller writes the file.
+ *
+ * Defaults handling: `spec.defaults.risk` is planner-only (the runtime
+ * schema does not allow `risk` in defaults), so we propagate it onto
+ * every node that does not set its own `risk` and strip it from the
+ * emitted defaults. All other `spec.defaults` fields pass through
+ * unchanged.
  */
 export function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocument {
+  const specDefaults = spec.defaults;
+  const defaultRisk = specDefaults?.risk;
+  // Runtime defaults (without the planner-only `risk` field).
+  const runtimeDefaults: GoalDagFileDefaults | undefined = specDefaults
+    ? cloneDefaults({
+        outputs: specDefaults.outputs,
+        validators: specDefaults.validators,
+        workspaceStrategy: specDefaults.workspaceStrategy,
+        completionGates: specDefaults.completionGates,
+        conflicts: specDefaults.conflicts,
+        modelScenario: specDefaults.modelScenario,
+      })
+    : undefined;
+
   const draft: GoalDagFileDocument = {
     version: spec.version ?? 1,
     objective: spec.objective,
-    ...(spec.defaults ? { defaults: cloneDefaults(spec.defaults) } : {}),
+    ...(runtimeDefaults && hasRuntimeDefaultContent(runtimeDefaults)
+      ? { defaults: runtimeDefaults }
+      : {}),
     ...(spec.modelRouting ? { modelRouting: cloneModelRouting(spec.modelRouting) } : {}),
-    nodes: spec.nodes.map(cloneNode),
+    nodes: spec.nodes.map((node) => cloneNode(node, defaultRisk)),
   };
   return parseGoalDagFileDocument(draft);
 }
@@ -129,7 +172,7 @@ export function validateGoalDagJson(content: string): GoalDagFileDocument {
   return parseGoalDagFileDocument(JSON.parse(content) as unknown);
 }
 
-function cloneNode(node: GoalDagSpecNode): GoalDagFileNode {
+function cloneNode(node: GoalDagSpecNode, defaultRisk: GoalDagNode["risk"] | undefined): GoalDagFileNode {
   const out: GoalDagFileNode = {
     id: node.id,
     objective: node.objective,
@@ -141,9 +184,21 @@ function cloneNode(node: GoalDagSpecNode): GoalDagFileNode {
   if (node.scope !== undefined) out.scope = node.scope;
   if (node.workspaceStrategy !== undefined) out.workspaceStrategy = node.workspaceStrategy;
   if (node.risk !== undefined) out.risk = node.risk;
+  else if (defaultRisk !== undefined) out.risk = defaultRisk;
   if (node.completionGates) out.completionGates = [...node.completionGates];
   if (node.modelScenario !== undefined) out.modelScenario = node.modelScenario;
   return out;
+}
+
+function hasRuntimeDefaultContent(defaults: GoalDagFileDefaults): boolean {
+  return (
+    defaults.outputs !== undefined ||
+    defaults.validators !== undefined ||
+    defaults.workspaceStrategy !== undefined ||
+    defaults.completionGates !== undefined ||
+    defaults.conflicts !== undefined ||
+    defaults.modelScenario !== undefined
+  );
 }
 
 function cloneDefaults(defaults: GoalDagFileDefaults): GoalDagFileDefaults {
@@ -182,6 +237,11 @@ function cloneModelRouting(config: GoalModelRoutingConfig): GoalModelRoutingConf
 // types may grow over time. The locally-declared GoalDagSpec /
 // GoalDagSpecNode are already exported above via their `export interface`
 // declarations.
+// Re-export the runtime types so skill authors and the agent skill can
+// import them from a single place. Keep this surface stable; the runtime
+// types may grow over time. The locally-declared GoalDagSpec /
+// GoalDagSpecNode / GoalDagSpecDefaults are already exported above via
+// their `export interface` declarations.
 export type {
   GoalDagConflictHints,
   GoalDagFileDefaults,
