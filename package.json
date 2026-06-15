@@ -6,8 +6,7 @@
   "keywords": [
     "pi-package",
     "goal-dag",
-    "goal-runner",
-    "agent-goal-runtime"
+    "goal-runner"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,7 +48,7 @@
   },
   "homepage": "https://github.com/a5345534/goal-dag#readme",
   "dependencies": {
-    "agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.5"
+    "goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

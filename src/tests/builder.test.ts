@@ -117,6 +117,8 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
     ],
     requiredEvidence: ["tests pass"],
     diffBaseRef: "main",
+    allowedPaths: ["src/**", "tests/**"],
+    forbiddenPaths: ["package-lock.json", "infra/**"],
   };
   const spec: GoalDagSpec = {
     objective: "x",
@@ -140,6 +142,8 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
   validation.requiredEvidence?.push("mutated after build");
   if (validation.artifactLocks?.[0]) validation.artifactLocks[0].path = "mutated.ts";
   assert.deepEqual(node?.validation?.requiredEvidence, ["tests pass"]);
+  assert.deepEqual(node?.validation?.allowedPaths, ["src/**", "tests/**"]);
+  assert.deepEqual(node?.validation?.forbiddenPaths, ["package-lock.json", "infra/**"]);
   assert.equal(node?.validation?.artifactLocks?.[0]?.path, "src/feature.ts");
 });
 
@@ -155,6 +159,8 @@ test("serializeGoalDagDocument includes kind implementation and validation contr
           profile: "code-change",
           requiredEvidence: ["unit tests pass"],
           diffBaseRef: "main",
+          allowedPaths: ["src/**"],
+          forbiddenPaths: ["secrets/**"],
         },
       },
     ],
@@ -162,7 +168,10 @@ test("serializeGoalDagDocument includes kind implementation and validation contr
   const json = serializeGoalDagDocument(document);
   assert.match(json, /"kind": "implementation"/);
   assert.match(json, /"validation"/);
-  assert.equal(validateGoalDagJson(json).nodes[0]?.validation?.profile, "code-change");
+  const reparsed = validateGoalDagJson(json);
+  assert.equal(reparsed.nodes[0]?.validation?.profile, "code-change");
+  assert.deepEqual(reparsed.nodes[0]?.validation?.allowedPaths, ["src/**"]);
+  assert.deepEqual(reparsed.nodes[0]?.validation?.forbiddenPaths, ["secrets/**"]);
 });
 
 test("buildGoalDagFromSpec forwards parser errors from the runtime", () => {
@@ -353,6 +362,33 @@ test("buildGoalDagFromSpec keeps non-risk defaults fields intact when flattening
     "spec-only risk must be stripped",
   );
   assert.equal(document.nodes[0]?.risk, "high");
+});
+
+test("buildGoalDagFromSpec preserves defaults.thinkingLevel in runtime DAG", () => {
+  const document = buildGoalDagFromSpec({
+    objective: "x",
+    defaults: { thinkingLevel: "high" },
+    nodes: [{ id: "a", objective: "a" }],
+  });
+  assert.equal(document.defaults?.thinkingLevel, "high");
+  assert.equal(validateGoalDagJson(serializeGoalDagDocument(document)).defaults?.thinkingLevel, "high");
+});
+
+test("buildGoalDagFromSpec keeps node thinkingLevel overrides alongside defaults", () => {
+  const document = buildGoalDagFromSpec({
+    objective: "x",
+    defaults: { thinkingLevel: "medium" },
+    nodes: [
+      { id: "a", objective: "a" },
+      { id: "b", objective: "b", thinkingLevel: "xhigh" },
+    ],
+  });
+  assert.equal(document.defaults?.thinkingLevel, "medium");
+  assert.equal(document.nodes[0]?.thinkingLevel, undefined);
+  assert.equal(document.nodes[1]?.thinkingLevel, "xhigh");
+  const json = serializeGoalDagDocument(document);
+  assert.match(json, /"thinkingLevel": "medium"/);
+  assert.match(json, /"thinkingLevel": "xhigh"/);
 });
 
 test("buildGoalDagFromSpec preserves the user's actual common-module audit use case", () => {
@@ -798,11 +834,16 @@ test("build-dag CLI writes planning trace with --trace", () => {
   }
 });
 
-test("GoalDagSpec schema documents kind validation and spec-only metadata", () => {
+test("GoalDagSpec schema documents kind validation defaults thinking and spec-only metadata", () => {
   const schema = JSON.parse(readFileSync(resolve(REPO_ROOT, "schemas", "goal-dag-spec.schema.json"), "utf8"));
   const nodeProperties = schema.$defs.node.properties;
+  const validationProperties = schema.$defs.validation.properties;
+  const defaultProperties = schema.$defs.defaults.properties;
   assert.ok(nodeProperties.kind, "schema should document runtime node kind");
   assert.ok(nodeProperties.validation, "schema should document runtime validation contract");
+  assert.ok(validationProperties.allowedPaths, "schema should document validation.allowedPaths");
+  assert.ok(validationProperties.forbiddenPaths, "schema should document validation.forbiddenPaths");
+  assert.ok(defaultProperties.thinkingLevel, "schema should document defaults.thinkingLevel");
   assert.ok(nodeProperties.acceptanceCriteria, "schema should document spec-only acceptanceCriteria");
   assert.ok(nodeProperties.decompositionRationale, "schema should document spec-only decompositionRationale");
 });

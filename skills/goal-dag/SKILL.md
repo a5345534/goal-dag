@@ -13,10 +13,9 @@ handoff command:
 /goal --dag <path>
 ```
 
-The current runtime implementation package is still named `agent-goal-runtime`;
-it exports the parser/types consumed by goal-runner and used by `goal-dag` for
-round-trip validation. `goal-dag` is Stage 2 only: it produces a validated DAG
-JSON plus optional trace JSON, but it does not execute `/goal`.
+`goal-runner` exports the parser/types used by `goal-dag` for round-trip
+validation. `goal-dag` is Stage 2 only: it produces a validated DAG JSON plus
+optional trace JSON, but it does not execute `/goal`.
 
 The skill is intentionally **prompt + reference heavy, code-light**. The agent
 performs the creative steps: extracting milestones from the document and
@@ -245,11 +244,11 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
       --spec <spec.json> --out <out.dag.json> --trace <out.trace.json>
     ```
 
-    The CLI round-trips the spec through the goal-runner parser currently
-    exported by `agent-goal-runtime` as `parseGoalDagFileDocument()` and refuses
-    to write an invalid DAG. Runtime fields such as `kind`, `validation`,
-    `workspace`, `risk`, `completionGates`, `modelScenario`, and `thinkingLevel`
-    are preserved in the emitted DAG. Spec-only fields (`openQuestions`,
+    The CLI round-trips the spec through the goal-runner parser exported as
+    `parseGoalDagFileDocument()` and refuses to write an invalid DAG. Runtime
+    fields such as `kind`, `validation`, `workspace`, `risk`,
+    `completionGates`, `modelScenario`, and `thinkingLevel` are preserved in the
+    emitted DAG. Spec-only fields (`openQuestions`,
     `consumes`, `produces`, `evidence`, `modelRationale`,
     `acceptanceCriteria`, `decompositionRationale`) are stripped from the
     runtime DAG and preserved in the trace sidecar.

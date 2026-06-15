@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/a5345534/goal-dag/schemas/goal-dag-spec.schema.json",
   "title": "GoalDagSpec Producer Input",
-  "description": "Producer-side GoalDagSpec accepted by goal-dag before round-tripping through the goal-runner/agent-goal-runtime parser. Spec-only fields are stripped from runtime DAG JSON and preserved in the planning trace sidecar.",
+  "description": "Producer-side GoalDagSpec accepted by goal-dag before round-tripping through the goal-runner parser. Spec-only fields are stripped from runtime DAG JSON and preserved in the planning trace sidecar.",
   "type": "object",
   "additionalProperties": false,
   "required": ["objective", "nodes"],
@@ -39,6 +39,7 @@
         "completionGates": { "$ref": "#/$defs/nonEmptyStringArray" },
         "conflicts": { "$ref": "#/$defs/conflicts" },
         "modelScenario": { "type": "string", "minLength": 1 },
+        "thinkingLevel": { "type": "string", "minLength": 1 },
         "risk": { "$ref": "#/$defs/risk" }
       }
     },
@@ -118,7 +119,9 @@
         "requiredEvidence": { "$ref": "#/$defs/nonEmptyStringArray" },
         "onAuditTestGap": { "type": "string", "minLength": 1 },
         "diffBaseRef": { "type": "string", "minLength": 1 },
-        "auditReportPaths": { "$ref": "#/$defs/nonEmptyStringArray" }
+        "auditReportPaths": { "$ref": "#/$defs/nonEmptyStringArray" },
+        "allowedPaths": { "$ref": "#/$defs/nonEmptyStringArray" },
+        "forbiddenPaths": { "$ref": "#/$defs/nonEmptyStringArray" }
       }
     },
     "artifactLock": {

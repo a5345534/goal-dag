@@ -6,9 +6,8 @@
 ## Context
 
 The Stage 3 **goal-runner** runtime defines a strict JSON DAG file format that
-`/goal --dag <path>` consumes. The current implementation package is still named
-`agent-goal-runtime`, and it exports the parser/types used by this repository
-(see [`docs/goal-dag-format.md`](https://github.com/a5345534/agent-goal-runtime/blob/main/docs/goal-dag-format.md)).
+`/goal --dag <path>` consumes, and it exports the parser/types used by this
+repository (see [`docs/goal-dag-format.md`](https://github.com/a5345534/goal-runner/blob/main/docs/goal-dag-format.md)).
 Writing that JSON by hand is error-prone — kebab-case ids, acyclic dependencies,
 model-scenario referential integrity, expected outputs, validation contracts,
 validators, conflict hints — and users who want to drive `/goal` from a
@@ -30,9 +29,9 @@ We considered two designs for closing that gap:
 ## Decision
 
 We chose (2). `goal-dag` lives in a separate repository
-(`a5345534/goal-dag`), depends on the current runtime implementation package
-`agent-goal-runtime` pinned by git ref, and owns the Stage 2 producer side
-end-to-end. The goal-runner runtime owns the consumer side and exposes only:
+(`a5345534/goal-dag`), depends on `goal-runner` pinned by git ref, and owns the
+Stage 2 producer side end-to-end. The goal-runner runtime owns the consumer side
+and exposes only:
 
 - `parseGoalDagFileDocument` — parser + validator (id pattern,
   dependency existence, self-dependency, cycle, model-scenario
@@ -79,16 +78,16 @@ but does not execute it.
 ```json
 {
   "dependencies": {
-    "agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.5"
+    "goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
   }
 }
 ```
 
 Pinned to a tag or commit, not a range, so `goal-dag` releases are reproducible
 and the runner runtime's release cadence does not silently pull breaking
-changes into `goal-dag`. User-facing docs call this Stage 3 **goal-runner**;
-`agent-goal-runtime` is the current implementation package name used for imports
-and dependency pinning.
+changes into `goal-dag`. The pinned commit is the version-sync proof for the
+Stage 3 parser/schema surface; it includes `validation.allowedPaths`,
+`validation.forbiddenPaths`, and `defaults.thinkingLevel`.
 
 ### The skill is prompt + reference heavy, code-light
 
@@ -156,8 +155,8 @@ change. The `prepack` hook still rebuilds on `npm pack` /
 │   ┌────────────┐              ┌─────────────────┐              │
 │   │  Dev doc   │              │  goal-runner    │              │
 │   │  (PRD,     │              │  parser         │              │
-│   │  OpenSpec, │              │  (agent-goal-   │              │
-│   │  etc.)     │              │  runtime pkg)   │              │
+│   │  OpenSpec, │              │                 │              │
+│   │  etc.)     │              │                 │              │
 │   └────────────┘              └─────────────────┘              │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘

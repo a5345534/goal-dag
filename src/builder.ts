@@ -8,7 +8,7 @@ import {
   type GoalDagNode,
   type GoalDagNodeWorkspaceBinding,
   type GoalModelRoutingConfig,
-} from "agent-goal-runtime";
+} from "goal-runner";
 
 export interface GoalDagSpecEvidenceReference {
   id?: string;
@@ -215,6 +215,7 @@ export function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocument {
         completionGates: specDefaults.completionGates,
         conflicts: specDefaults.conflicts,
         modelScenario: specDefaults.modelScenario,
+        thinkingLevel: specDefaults.thinkingLevel,
       })
     : undefined;
 
@@ -388,7 +389,8 @@ function hasRuntimeDefaultContent(defaults: GoalDagFileDefaults): boolean {
     defaults.workspaceStrategy !== undefined ||
     defaults.completionGates !== undefined ||
     defaults.conflicts !== undefined ||
-    defaults.modelScenario !== undefined
+    defaults.modelScenario !== undefined ||
+    defaults.thinkingLevel !== undefined
   );
 }
 
@@ -400,6 +402,7 @@ function cloneDefaults(defaults: GoalDagFileDefaults): GoalDagFileDefaults {
   if (defaults.completionGates) out.completionGates = [...defaults.completionGates];
   if (defaults.conflicts) out.conflicts = cloneConflicts(defaults.conflicts);
   if (defaults.modelScenario !== undefined) out.modelScenario = defaults.modelScenario;
+  if (defaults.thinkingLevel !== undefined) out.thinkingLevel = defaults.thinkingLevel;
   return out;
 }
 
@@ -425,6 +428,8 @@ function cloneValidationContract(
   if (validation.onAuditTestGap !== undefined) out.onAuditTestGap = validation.onAuditTestGap;
   if (validation.diffBaseRef !== undefined) out.diffBaseRef = validation.diffBaseRef;
   if (validation.auditReportPaths) out.auditReportPaths = [...validation.auditReportPaths];
+  if (validation.allowedPaths) out.allowedPaths = [...validation.allowedPaths];
+  if (validation.forbiddenPaths) out.forbiddenPaths = [...validation.forbiddenPaths];
   return out;
 }
 

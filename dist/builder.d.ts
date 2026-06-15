@@ -1,4 +1,4 @@
-import { type GoalDagConflictHints, type GoalDagFileDefaults, type GoalDagFileDocument, type GoalDagFileNode, type GoalDagNode, type GoalDagNodeWorkspaceBinding, type GoalModelRoutingConfig } from "agent-goal-runtime";
+import { type GoalDagConflictHints, type GoalDagFileDefaults, type GoalDagFileDocument, type GoalDagFileNode, type GoalDagNode, type GoalDagNodeWorkspaceBinding, type GoalModelRoutingConfig } from "goal-runner";
 export interface GoalDagSpecEvidenceReference {
     id?: string;
     source?: string;

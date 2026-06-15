@@ -26,8 +26,7 @@ This package only does two things:
 
 1. Reads a spec (which the agent or a script produces).
 2. Composes a draft DAG file from the spec and round-trips it through the
-   runner parser, currently imported from the historical/internal
-   `agent-goal-runtime` package as `parseGoalDagFileDocument()`. The parser is
+   `goal-runner` parser exported as `parseGoalDagFileDocument()`. The parser is
    the single source of truth for id pattern, dependency existence,
    self-dependency, cycle, model-scenario referential integrity, and runtime
    DAG field validation. The builder refuses to write an invalid DAG.
@@ -39,18 +38,14 @@ those fields from the runtime DAG and can write a separate planning trace
 sidecar JSON. When `openQuestions` are used as a node acceptance handle, prefix
 the question with `<node-id>:` so the trace can be reviewed against that node.
 
-## Naming note: goal-runner and agent-goal-runtime
+## Naming note: goal-runner
 
-User-facing docs use **goal-runner** for the Stage 3 runner that consumes
-`/goal --dag <path>`. The current npm/git dependency remains
-`agent-goal-runtime` because that is the historical package name exporting the
-DAG parser and runtime types consumed by goal-runner. In this repository:
+`goal-dag` depends on `goal-runner` for the Stage 3 parser/types and uses
+`goal-runner` consistently in code and user-facing docs.
 
 - `goal-dag` is Stage 2 and only produces validated DAG JSON plus optional trace
   JSON.
 - `goal-runner` is Stage 3 and executes DAGs through `/goal --dag <path>`.
-- `agent-goal-runtime` is the implementation package name used for imports and
-  dependency pinning until the runtime package is renamed.
 
 ## Install
 
@@ -69,10 +64,11 @@ pi update git:github.com/a5345534/goal-dag
 pi update
 ```
 
-The runtime implementation dependency is pinned via `goal-dag`'s own
-`package.json` to `github:a5345534/agent-goal-runtime#v0.1.5`, so a single
-install or update brings in the Stage 2 producer plus the Stage 3 parser/runtime
-API it validates against.
+The runtime dependency is pinned via `goal-dag`'s own `package.json` to
+`github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07`, so a
+single install or update brings in the Stage 2 producer plus the Stage 3
+parser/runtime API it validates against. This pin includes `validation.allowedPaths`,
+`validation.forbiddenPaths`, and `defaults.thinkingLevel` support.
 
 For a local-development checkout:
 
@@ -145,6 +141,8 @@ const spec: GoalDagSpec = {
         profile: "code-change",
         testSpecNodeId: "attendance-parity",
         diffBaseRef: "main",
+        allowedPaths: ["tests/**", "people_frappe/**"],
+        forbiddenPaths: ["package-lock.json", "infra/**"],
       },
       after: ["attendance-parity", "payroll-doctypes"],
       consumes: ["attendance fixtures complete", "payroll doctypes complete"],
@@ -244,7 +242,6 @@ the rationale behind splitting this Stage 2 Goal DAG producer out from the Stage
 ```
 ┌────────────────────────────────────────┐
 │  goal-runner stage                     │
-│  (agent-goal-runtime package today)    │
 │  - parseGoalDagFileDocument (parser)   │
 │  - GoalDagFileDocument / types         │
 └────────────────────────────────────────┘
@@ -299,16 +296,16 @@ to catch stale artifacts at release time.
 
 ### Runtime dependency
 
-The package depends on the current runtime implementation package
-`agent-goal-runtime` via a git ref:
+The package depends on `goal-runner` via a git ref:
 
 ```json
-"agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.5"
+"goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
 ```
 
-This package is consumed by the user-facing goal-runner stage today. Pin to a
-tag (or a commit) so `goal-dag` releases are reproducible. The runtime API
-surface `goal-dag` depends on:
+Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
+is the version-sync proof for the Stage 3 parser/schema surface: it includes
+`validation.allowedPaths`, `validation.forbiddenPaths`, and
+`defaults.thinkingLevel`. The runtime API surface `goal-dag` depends on:
 
 - `parseGoalDagFileDocument` (parser + validator)
 - `GoalDagFileDocument`, `GoalDagFileNode`, `GoalDagFileDefaults`,

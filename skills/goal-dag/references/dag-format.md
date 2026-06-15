@@ -1,14 +1,13 @@
 # Goal DAG file format
 
 This is a quick reference for the Goal DAG file consumed by the Stage 3
-**goal-runner** runtime via `/goal --dag <path>`. The current implementation
-package is still named `agent-goal-runtime`; it exports the parser and types that
-`goal-dag` round-trips through.
+**goal-runner** runtime via `/goal --dag <path>`. `goal-runner` exports the
+parser and types that `goal-dag` round-trips through.
 
 Full runtime references:
 
-- Schema: <https://github.com/a5345534/agent-goal-runtime/blob/main/schemas/goal-dag.schema.json>
-- User-facing format doc: <https://github.com/a5345534/agent-goal-runtime/blob/main/docs/goal-dag-format.md>
+- Schema: <https://github.com/a5345534/goal-runner/blob/main/schemas/goal-dag.schema.json>
+- User-facing format doc: <https://github.com/a5345534/goal-runner/blob/main/docs/goal-dag-format.md>
 
 Producer-side schema reference:
 
@@ -20,7 +19,7 @@ Producer-side schema reference:
 | --- | --- | --- | --- |
 | `version` | yes | `1` | File format version. Only `1` is accepted. |
 | `objective` | yes | non-empty string | The goal objective shown in status / monitor and used for the controller session. |
-| `defaults` | no | object | Defaults copied to nodes that do not override them. |
+| `defaults` | no | object | Defaults copied to nodes that do not override them, including runtime fields such as `outputs`, `validators`, `workspaceStrategy`, `completionGates`, `conflicts`, `modelScenario`, and `thinkingLevel`. |
 | `modelRouting` | no | object | Scenario-to-model routing table used by Pi for the controller session and DAG node subagents. |
 | `nodes` | yes | non-empty array (≤ 20) | Explicit DAG nodes. |
 
@@ -36,7 +35,7 @@ Producer-side schema reference:
 | `conflicts` | no | object | File / module / capability conflict hints for scheduler serialization. |
 | `scope` | no | string | Human-readable scope label. |
 | `kind` | no | string | Runtime node kind, for example `implementation`, `validation`, `review`, or another kind supported by the active runner policy. |
-| `validation` | no | object | Runtime validation contract, for example `profile`, `testSpecNodeId`, `approvedByNodeId`, `artifactLocks`, `requiredEvidence`, and `diffBaseRef`. |
+| `validation` | no | object | Runtime validation contract, for example `profile`, `testSpecNodeId`, `approvedByNodeId`, `artifactLocks`, `requiredEvidence`, `diffBaseRef`, `auditReportPaths`, `allowedPaths`, and `forbiddenPaths`. |
 | `workspaceStrategy` | no | string | Workspace allocation strategy. Defaults to native Git worktree in Pi. |
 | `workspace` | no | object | Deterministic node worktree binding: `worktreeSlug`, optional `branch`, optional `baseRef`. For native-git nodes, `goal-dag` emits `worktreeSlug: <node id>` when omitted. |
 | `risk` | no | `low` / `medium` / `high` | Risk label for scheduling / model-routing / review policy. |
@@ -54,6 +53,8 @@ Producer-side schema reference:
 - The graph is acyclic.
 - `kind` and `validation` are runtime fields and pass through from `GoalDagSpec` into the emitted DAG.
 - `validation.testSpecNodeId`, `validation.approvedByNodeId`, and validation artifact-lock node ids must be kebab-case node ids when present.
+- `validation.allowedPaths` / `validation.forbiddenPaths` are runtime scope-policy fields and must pass through into the emitted DAG. They are not spec-only metadata.
+- `defaults.thinkingLevel` is a runtime default applied by goal-runner to nodes that do not set node-level `thinkingLevel`. It must pass through into the emitted DAG.
 - `modelScenario` references an entry in `modelRouting.scenarios` (when
   `modelRouting` is declared) — or `modelRouting` must declare the scenario.
 - **Model ID canonical format**: all `model` fields in `modelRouting.scenarios`
@@ -133,7 +134,9 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
       "validation": {
         "profile": "code-change",
         "testSpecNodeId": "attendance-parity",
-        "diffBaseRef": "main"
+        "diffBaseRef": "main",
+        "allowedPaths": ["tests/**", "people_frappe/**"],
+        "forbiddenPaths": ["package-lock.json", "infra/**"]
       },
       "after": ["attendance-parity", "payroll-doctypes"],
       "consumes": ["attendance fixtures complete", "payroll doctypes complete"],

@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseGoalDagFileDocument, } from "agent-goal-runtime";
+import { parseGoalDagFileDocument, } from "goal-runner";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
  * graph / model-scenario checks happen later in {@link buildGoalDagFromSpec}
@@ -68,6 +68,7 @@ export function buildGoalDagFromSpec(spec) {
             completionGates: specDefaults.completionGates,
             conflicts: specDefaults.conflicts,
             modelScenario: specDefaults.modelScenario,
+            thinkingLevel: specDefaults.thinkingLevel,
         })
         : undefined;
     const draft = {
@@ -224,7 +225,8 @@ function hasRuntimeDefaultContent(defaults) {
         defaults.workspaceStrategy !== undefined ||
         defaults.completionGates !== undefined ||
         defaults.conflicts !== undefined ||
-        defaults.modelScenario !== undefined);
+        defaults.modelScenario !== undefined ||
+        defaults.thinkingLevel !== undefined);
 }
 function cloneDefaults(defaults) {
     const out = {};
@@ -240,6 +242,8 @@ function cloneDefaults(defaults) {
         out.conflicts = cloneConflicts(defaults.conflicts);
     if (defaults.modelScenario !== undefined)
         out.modelScenario = defaults.modelScenario;
+    if (defaults.thinkingLevel !== undefined)
+        out.thinkingLevel = defaults.thinkingLevel;
     return out;
 }
 function cloneConflicts(conflicts) {
@@ -271,6 +275,10 @@ function cloneValidationContract(validation) {
         out.diffBaseRef = validation.diffBaseRef;
     if (validation.auditReportPaths)
         out.auditReportPaths = [...validation.auditReportPaths];
+    if (validation.allowedPaths)
+        out.allowedPaths = [...validation.allowedPaths];
+    if (validation.forbiddenPaths)
+        out.forbiddenPaths = [...validation.forbiddenPaths];
     return out;
 }
 function cloneModelRouting(config) {
