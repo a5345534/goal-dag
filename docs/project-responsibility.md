@@ -1,42 +1,45 @@
 # Project Responsibility
 
-Status: authoritative project-boundary document for `goal-dag`.
+Status: authoritative project-boundary document for this repository.
 
-This document defines what this repository owns, what it must not own, and how it receives and hands off work in the three-stage goal execution pipeline.
+This document defines what this repository owns, what it must not own, and which artifact contracts it must honor. The repository should not need to know which concrete repository implements an upstream or downstream stage.
 
-## Pipeline position
+## Pipeline contract
 
 ```text
-Stage 1: goal-spec   user goal -> OpenSpec change package
-Stage 2: goal-dag    OpenSpec/PRD/design/ticket -> validated Goal DAG JSON + optional trace
-Stage 3: goal-runner Goal DAG JSON -> runtime execution
+Stage 1: Specification Authoring   user intent -> governed specification package
+Stage 2: Execution Planning        specification/development document -> runtime DAG JSON + optional planning trace
+Stage 3: Runtime Execution         runtime DAG JSON or single objective -> durable execution state
 ```
 
-`goal-dag` is Stage 2 only. Its job is to turn an already-authored planning document into a validated runtime DAG JSON file that `goal-runner` can execute.
+This repository implements **Stage 2: Execution Planning**.
+
+It must know the Stage 1 input artifact contract and the Stage 3 runtime DAG artifact contract. It must not depend on, call into, or name a concrete specification-authoring or runtime-execution repository.
 
 ## Owns
 
-`goal-dag` owns:
+This repository owns:
 
 - reading development documents for execution planning;
-- reading OpenSpec change packages through `source-manifest.json`;
-- extracting source-grounded candidate nodes;
+- reading governed specification packages through `source-manifest.json`;
+- extracting source-grounded candidate execution nodes;
 - dependency evidence review;
 - recursive node decomposition review;
 - node quality review;
 - model assignment from the active model catalog;
-- producer-side `GoalDagSpec` parsing;
+- producer-side planning spec parsing;
 - runtime DAG JSON composition;
 - optional planning trace sidecar generation;
-- round-trip validation through the `goal-runner` parser.
+- round-trip validation through the runtime DAG parser contract.
 
 ## Does not own
 
-`goal-dag` must not own or perform:
+This repository must not own or perform:
 
-- user-goal value challenge or OpenSpec authoring;
-- OpenSpec change package creation or modification;
-- `/goal` execution;
+- user-goal value challenge;
+- governed specification authoring;
+- specification package creation or modification;
+- runtime execution command invocation;
 - subagent session management;
 - worktree allocation;
 - validator execution;
@@ -50,26 +53,26 @@ Stage 3: goal-runner Goal DAG JSON -> runtime execution
 
 Valid Stage 2 inputs include:
 
-- `openspec/changes/<change-name>/` directories produced by `goal-spec`;
+- governed specification package directories;
 - PRDs;
 - design docs;
 - ticket descriptions;
-- other source documents that can be mapped into a `GoalDagSpec`.
+- other source documents that can be mapped into a producer-side planning spec.
 
-When input is an OpenSpec change directory, `goal-dag` must:
+When input is a governed specification package directory, this repository must:
 
 1. read `source-manifest.json` first;
 2. read every source listed in `sources[]`;
-3. treat `proposal`, `design`, `tasks`, and `spec-delta` entries as authoritative;
-4. not treat `change-explainer.html` as authoritative;
-5. not read `.goal-spec/` workflow artifacts as source of truth;
+3. treat proposal, design, tasks, and spec-delta entries as authoritative;
+4. not treat human-readable explainers as authoritative;
+5. not read upstream local workflow artifacts as source of truth;
 6. stop or require manifest regeneration if the manifest is missing or stale;
 7. preserve assumptions and open questions in the planning trace;
 8. convert implementation-sensitive open questions into a decision node, a supported human-confirmation gate, or a DAG generation blocker.
 
 ## Outputs
 
-Primary output:
+Primary runtime handoff output:
 
 ```text
 <name>.dag.json
@@ -85,14 +88,14 @@ Optional review output:
 
 ## Runtime DAG contract
 
-The runtime DAG JSON may contain fields supported by `goal-runner`, including:
+The runtime DAG JSON may contain fields supported by the runtime contract, including:
 
 - root `version`, `objective`, `defaults`, `modelRouting`, and `nodes`;
 - node `id`, `objective`, `after`, `outputs`, `validators`, `conflicts`, `scope`, `kind`, `validation`, `workspaceStrategy`, `workspace`, `risk`, `completionGates`, `modelScenario`, and `thinkingLevel`;
 - defaults such as `validators`, `workspaceStrategy`, `completionGates`, `conflicts`, `modelScenario`, and `thinkingLevel`;
 - validation contract fields such as `profile`, `testSpecNodeId`, `approvedByNodeId`, `artifactLocks`, `requiredEvidence`, `diffBaseRef`, `auditReportPaths`, `allowedPaths`, and `forbiddenPaths`.
 
-`goal-dag` must round-trip the emitted DAG through the `goal-runner` parser before presenting it as ready for `/goal --dag`.
+This repository must round-trip emitted DAG JSON through the runtime DAG parser contract before presenting it as ready for runtime execution.
 
 ## Producer-only metadata
 
@@ -106,44 +109,46 @@ The following fields are producer-only and must never appear in runtime DAG JSON
 - node `acceptanceCriteria`;
 - node `decompositionRationale`.
 
-These fields may appear in `GoalDagSpec` and in the planning trace sidecar.
+These fields may appear in producer-side planning specs and in the planning trace sidecar.
 
-## Handoff to `goal-runner`
+## Handoff contract
 
-`goal-dag` hands off exactly one runtime input to `goal-runner`:
+This repository hands off exactly one runtime input to any runtime-execution implementation:
 
 ```text
-/goal --dag <name>.dag.json
+runtime DAG JSON file: <name>.dag.json
 ```
 
-The command may be shown to the user, but `goal-dag` must not execute it.
+This repository may show a runtime execution command to the user, but it must not execute it.
 
-`goal-dag` may also produce `<name>.trace.json`, but `goal-runner` must not consume the trace sidecar as runtime input.
+This repository may also produce `<name>.trace.json`, but runtime execution must not consume the trace sidecar as runtime input.
 
 ## Drift prevention rules
 
 A change to this repository is suspicious and requires boundary review if it:
 
-- creates or modifies OpenSpec source packages;
-- invokes `/goal`;
+- creates or modifies governed specification source packages;
+- invokes runtime execution commands;
 - creates worktrees or subagent sessions;
 - executes validators;
 - implements runtime scheduler behavior;
 - implements controller validation enforcement;
 - writes lifecycle ledger data;
 - emits producer-only metadata into `.dag.json`;
-- depends on non-authoritative `change-explainer.html` content as source of truth;
-- treats `.goal-spec/` workflow artifacts as source of truth.
+- depends on non-authoritative explainer content as source of truth;
+- treats upstream local workflow artifacts as source of truth;
+- requires a concrete upstream or downstream repository name to function.
 
 ## Reviewer checklist
 
-Before merging a change to `goal-dag`, verify:
+Before merging a change to this repository, verify:
 
-- OpenSpec input still goes through `source-manifest.json` and authoritative sources;
-- no OpenSpec authoring responsibility was introduced;
-- no `/goal` execution was introduced;
-- the runtime DAG is validated by `goal-runner` parser;
+- governed specification input still goes through `source-manifest.json` and authoritative sources;
+- no specification-authoring responsibility was introduced;
+- no runtime execution command invocation was introduced;
+- the runtime DAG is validated by the runtime parser contract;
 - producer-only metadata is stripped from `.dag.json`;
-- runtime fields supported by `goal-runner` are preserved when supplied;
+- runtime fields supported by the runtime DAG contract are preserved when supplied;
 - `.trace.json` remains optional and non-runtime;
-- docs and schema match the actual `GoalDagSpec` builder behavior.
+- docs and schema match the actual planning-spec builder behavior;
+- the repository does not need to know the concrete repository names of adjacent stages.
