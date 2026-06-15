@@ -102,6 +102,7 @@ export function buildGoalDagPlanningTrace(spec, document = buildGoalDagFromSpec(
     });
     const dependencyReview = document.nodes.map((node) => buildDependencyReviewRow(node.id, nodesById, evidenceContext.byNode, warnings));
     const modelAssignments = document.nodes.map((node) => buildModelAssignmentRow(node.id, spec, nodesById.get(node.id), warnings));
+    const nodeQuality = document.nodes.map((node) => buildNodeQualityRow(node.id, spec, nodesById.get(node.id), warnings));
     return {
         version: 1,
         objective: document.objective,
@@ -109,6 +110,7 @@ export function buildGoalDagPlanningTrace(spec, document = buildGoalDagFromSpec(
         transitions,
         dependencyReview,
         modelAssignments,
+        nodeQuality,
         warnings,
         openQuestions: [...(spec.openQuestions ?? [])],
     };
@@ -411,6 +413,25 @@ function buildModelAssignmentRow(nodeId, spec, node, globalWarnings) {
         ...(warnings.length > 0 ? { warnings } : {}),
     };
 }
+function buildNodeQualityRow(nodeId, spec, node, globalWarnings) {
+    const warnings = [];
+    const acceptanceCriteria = [...(node?.acceptanceCriteria ?? [])];
+    const hasAcceptanceHandle = (node?.outputs && node.outputs.length > 0) ||
+        (node?.validators && node.validators.length > 0) ||
+        acceptanceCriteria.length > 0 ||
+        (spec.openQuestions && spec.openQuestions.length > 0 && acceptanceCriteria.length === 0);
+    if (!hasAcceptanceHandle) {
+        const warning = "No acceptance handle declared; confirm expected outputs, validators, or review criteria before execution.";
+        warnings.push(warning);
+        globalWarnings.push(`${nodeId}: ${warning}`);
+    }
+    return {
+        nodeId,
+        acceptanceCriteria,
+        ...(node?.decompositionRationale ? { decompositionRationale: node.decompositionRationale } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
+    };
+}
 function validatePlanningMetadata(input, path) {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
         throw new Error(`Invalid goal DAG spec: ${path} must be an object`);
@@ -419,8 +440,12 @@ function validatePlanningMetadata(input, path) {
     validateOptionalStringArray(record.consumes, `${path}.consumes`);
     validateOptionalStringArray(record.produces, `${path}.produces`);
     validateEvidenceArray(record.evidence, `${path}.evidence`);
+    validateOptionalStringArray(record.acceptanceCriteria, `${path}.acceptanceCriteria`);
     if (record.modelRationale !== undefined && typeof record.modelRationale !== "string") {
         throw new Error(`Invalid goal DAG spec: ${path}.modelRationale must be a string when present`);
+    }
+    if (record.decompositionRationale !== undefined && typeof record.decompositionRationale !== "string") {
+        throw new Error(`Invalid goal DAG spec: ${path}.decompositionRationale must be a string when present`);
     }
 }
 function validateOptionalStringArray(input, path) {

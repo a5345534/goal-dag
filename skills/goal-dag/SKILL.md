@@ -42,8 +42,9 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 
 ## Workflow
 
-1. **Read the document** with `read`. Do not invent content; the document is
-   the source of truth for the goal objective and node list.
+1. **Read the source document** with `read`. Do not invent content; the document
+   is the source of truth for the goal objective and node list.
+
 2. **Read the model catalog** before assigning models. Prefer a project-local
    `.goal/model-catalog.json` when present; otherwise use this package's
    [`../../catalogs/pi-available-models.json`](../../catalogs/pi-available-models.json).
@@ -51,103 +52,121 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
    maps task traits (for example `taskType`, `risk`, `privacy`, and estimated
    context) to a recommended `modelScenario` and Pi model id. Use only models
    from this catalog unless the user explicitly supplies another model.
-3. **Extract a `GoalDagSpec`**. Use this exact shape:
 
-   ```ts
-   interface GoalDagSpec {
-     version?: 1;
-     objective: string;          // one-sentence summary of the overall goal
-     defaults?: { ... };         // copied to every node unless overridden; goal-dag supports defaults.risk
-     modelRouting?: { ... };     // see references/routing-scenarios.md
-     openQuestions?: string[];   // spec-only questions preserved in the trace sidecar
-     nodes: Array<{
-       id: string;               // kebab-case, ^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$
-       objective: string;        // work assigned to the subagent
-       after?: string[];         // node ids that must complete first
-       outputs?: string[];       // expected files / dirs, workspace-root-relative (no .worktrees/...)
-       validators?: string[];    // shell validators
-       conflicts?: { files?: string[]; modules?: string[]; capabilities?: string[] };
-       scope?: string;
-       workspaceStrategy?: string;
-       workspace?: { worktreeSlug?: string; branch?: string; baseRef?: string }; // deterministic node workspace binding
-       risk?: "low" | "medium" | "high";
-       completionGates?: string[];
-       modelScenario?: string;
-       consumes?: string[];      // spec-only states/artifacts required by this node
-       produces?: string[];      // spec-only states/artifacts produced by this node
-       evidence?: Array<string | { id?: string; source?: string; quote?: string; note?: string; supports?: string[] }>;
-       modelRationale?: string;  // spec-only reason for the chosen modelScenario
-     }>;
-   }
-   ```
+3. **Extract candidate tasks from source evidence.** Do not invent content.
+   Use the document as the sole source of truth. For each candidate task, note
+   what the document explicitly says about its scope, outputs, order, and risk.
 
-   See [`references/dag-format.md`](references/dag-format.md) for the full
-   field reference, [`references/routing-scenarios.md`](references/routing-scenarios.md)
-   for model-routing examples, [`references/model-catalog.md`](references/model-catalog.md)
-   for the model assignment workflow, and
-   [`references/planning-quality.md`](references/planning-quality.md) for the
-   evidence → transition graph → reviewed DAG quality loop.
+4. **Build an evidence table.** Adapt the Plan-over-Graph pattern. For each
+   candidate task extract: source quote/section, implied artifact/state, and
+   ambiguity to resolve.
 
-4. **Run a planning-quality pass before finalizing edges.** Adapt the
-   Plan-over-Graph pattern: extract an evidence table, map narrative items into
-   abstract transition rules (`source` prerequisites → `target` outcomes), then
-   plan over that graph for maximum safe parallelism. Encode the reviewed states
+5. **Build an abstract transition graph.** Map narrative items into rules:
+   `source` (prerequisites) → `target` (outcomes). Encode the reviewed states
    into each node's spec-only `consumes`, `produces`, and `evidence` fields.
-   Show a dependency review table with each node's consumed state, produced
-   state, `after` edges, and why it cannot run in parallel. For high-risk plans,
-   ambiguous dependency graphs, or >6 nodes, run a skeptical judge/consensus
-   pass inspired by Open Multi-Agent: find missing dependencies, invented
-   dependencies, redundant nodes, missing validators, weak model assignments,
-   and critical-path bottlenecks. Revise once, then ask the user when evidence
+
+6. **Run a recursive decomposition pass.** Before writing the final spec,
+   evaluate each candidate node against the **node size budget** (see
+   [`references/planning-quality.md`](references/planning-quality.md#node-size-budget)).
+   A node is too large when:
+   - Its objective combines multiple unrelated work types.
+   - It combines design + implementation + tests + docs in one node.
+   - It crosses multiple modules without a clear boundary.
+   - A subagent would need a major internal plan before executing.
+   - It requires the strongest model only because scope is too broad.
+   - It cannot be independently verified.
+
+   When a node is too large, split it using **candidate decomposition
+   patterns** (see [`references/planning-quality.md`](references/planning-quality.md#candidate-decomposition-patterns)).
+   These patterns suggest node boundaries, not dependency chains. Do not add
+   `after` edges based on patterns alone — dependencies still require
+   `consumes` / `produces` / `evidence`.
+
+   If a broad node cannot be safely split from source evidence:
+   - Mark it high risk.
+   - Add `openQuestions` explaining the ambiguity.
+   - Add `human-confirmation` to `completionGates`.
+   - Do not silently execute it.
+
+7. **Run a node quality review.** Before writing the final spec, show this
+   table (see [`references/planning-quality.md`](references/planning-quality.md#node-quality-review-table)):
+
+   | node | candidate boundary | acceptance handle | dependency evidence | risk | model implication | refinement action |
+   | --- | --- | --- | --- | --- | --- | --- |
+
+   **Acceptance handle** — every node must have at least one of:
+   - `outputs`
+   - `validators`
+   - spec-only `acceptanceCriteria` (extracted from source evidence)
+   - `openQuestions` explaining why acceptance is unresolved
+
+   Do not invent shell validators or outputs. When the source document does
+   not provide deterministic checks, use `acceptanceCriteria` or
+   `openQuestions`. A node without any acceptance handle must not be marked
+   low risk.
+
+8. **Run dependency / critical-path review.** Show a dependency review table
+   with each node's consumed state, produced state, `after` edges, and why it
+   cannot run in parallel. For high-risk plans, ambiguous dependency graphs,
+   or >6 nodes, run a skeptical judge/consensus pass inspired by
+   Open Multi-Agent: find missing dependencies, invented dependencies,
+   redundant nodes, missing validators, weak model assignments, and
+   critical-path bottlenecks. Revise once, then ask the user when evidence
    is still unclear.
 
-5. **Assign models with LLM judgment using the catalog.** Produce and show a
-   table before writing the final spec. Include a `controller` row for the DAG
-   controller and one row per DAG node. For the controller, evaluate the DAG's
-   overall risk (highest per-node risk):
+9. **Run model assignment.** Produce and show a table before writing the
+   final spec. Include a `controller` row for the DAG controller and one row
+   per DAG node:
 
    | target | risk/scope summary | chosen scenario | model | reason |
    | --- | --- | --- | --- | --- |
 
-   Then write `modelRouting.scenarios`, a dedicated `modelRouting.controllerScenario`,
-   explicit per-node `modelScenario` values, and per-node `modelRationale` into
-   the spec. Prefer explicit per-node assignments over fuzzy rules; use runtime
-   `modelRouting.rules` only when a rule is simpler and less ambiguous. If the
-   controller or nodes would otherwise fall back to the current Pi session model,
-   warn the user and ask whether that is intended.
+   Then write `modelRouting.scenarios`, a dedicated
+   `modelRouting.controllerScenario`, explicit per-node `modelScenario`
+   values, and per-node `modelRationale` into the spec.
 
-6. **Ask clarifying questions** when the document is ambiguous:
-   - Are nodes A and B parallel, or does B depend on A?
-   - Which modules / files does each node touch? (drives `conflicts`)
-   - Is there a verification command per node? (drives `validators`)
-   - What state/artifact does each dependency consume and produce?
-   - Is a shortcut/optional node required, or should it be omitted as redundant?
-   - Should a node use a different model? (drives `modelScenario`)
-   - Is a cheaper/faster model acceptable for low-risk docs/spec-only nodes?
-   - Does a high-risk or final-audit node require a stronger/long-context model?
+10. **Run a model-cost sanity review.** If most leaf implementation nodes
+    require the strongest model, inspect whether:
+    - Are scan/design/review work types mixed into implementation nodes?
+    - Can high-risk decisions be split into a separate review node?
+    - Can docs/tests be split and assigned cheaper models?
+    - Is the whole DAG genuinely high risk?
 
-7. **Write the spec to a temp JSON file** and run:
+    Show a cost-tier table (see
+    [`references/model-catalog.md`](references/model-catalog.md#model-cost-sanity-review)).
+    If strong models remain justified, record the reason in the trace.
 
-   ```bash
-   npx --package=goal-dag goal-dag build-dag \
-     --spec <spec.json> --out <out.dag.json> --trace <out.trace.json>
-   ```
+11. **Ask clarifying questions** when the document is ambiguous:
+    - Are nodes A and B parallel, or does B depend on A?
+    - Which modules / files does each node touch? (drives `conflicts`)
+    - Is there a verification command per node? (drives `validators`)
+    - What state/artifact does each dependency consume and produce?
+    - Is a shortcut/optional node required, or should it be omitted as redundant?
+    - Should a node use a different model? (drives `modelScenario`)
+    - Is a cheaper/faster model acceptable for low-risk docs/spec-only nodes?
+    - Does a high-risk or final-audit node require a stronger/long-context model?
 
-   The CLI round-trips the spec through `agent-goal-runtime`'s
-   `parseGoalDagFileDocument()` and refuses to write an invalid DAG. Spec-only
-   `consumes`, `produces`, `evidence`, and `modelRationale` fields are stripped
-   from the runtime DAG and preserved in the trace sidecar. For native-git nodes,
-   it emits `workspace.worktreeSlug` when omitted and normalizes matching
-   `.worktrees/<slug>/...` outputs to workspace-root-relative paths.
+12. **Write the spec to a temp JSON file** and run:
 
-8. **Show the user the resulting DAG and trace** (objective + node ids +
-   dependency graph + dependency review + model assignment table + trace warnings
-   / open questions) and the diff vs. the document's intent, then ask whether to
-   start:
+    ```bash
+    npx --package=goal-dag goal-dag build-dag \
+      --spec <spec.json> --out <out.dag.json> --trace <out.trace.json>
+    ```
 
-   ```text
-   /goal --dag <out.dag.json>
-   ```
+    The CLI round-trips the spec through `agent-goal-runtime`'s
+    `parseGoalDagFileDocument()` and refuses to write an invalid DAG. Spec-only
+    fields (`consumes`, `produces`, `evidence`, `modelRationale`,
+    `acceptanceCriteria`, `decompositionRationale`) are stripped from the
+    runtime DAG and preserved in the trace sidecar.
+
+13. **Show the user the resulting DAG and trace** (objective + node ids +
+    dependency graph + node quality review + dependency review + model
+    assignment table + cost-tier table + trace warnings / open questions)
+    and the diff vs. the document's intent, then ask whether to start:
+
+    ```text
+    /goal --dag <out.dag.json>
+    ```
 
 ## Hard rules
 
@@ -157,10 +176,9 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
   independent.
 - **Do not invent `validators` or `outputs` the document does not support.**
   The runtime will run validators as plain shell commands; only include them
-  when the document specifies the check. Otherwise omit the field. Outputs must
-  be relative to the node workspace root; if you need a deterministic worktree
-  name, set `workspace.worktreeSlug` instead of prefixing outputs with
-  `.worktrees/...`.
+  when the document specifies the check. Use spec-only `acceptanceCriteria` or
+  `openQuestions` when the source document does not provide deterministic
+  checks.
 - **Do not use models outside the active model catalog.** Declare every chosen
   model in `modelRouting.scenarios`, then assign each node with `modelScenario`.
   Omit `modelScenario` only after warning the user that runtime fallback will
@@ -171,6 +189,25 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
   is only based on list order or habit, remove it or ask the user.
 - **Always round-trip through the runtime parser** so cycle / missing-dep /
   scenario-ref errors surface before the user sees the file.
+
+- **A shallow DAG is acceptable** when nodes are independently executable and
+  individually verifiable. Do not increase depth just to make the DAG look
+  more detailed. The failure condition is oversized or unverifiable nodes,
+  not shallow depth itself.
+- **Candidate decomposition patterns suggest node boundaries, not
+  dependency edges.** Only add `after` when consumes / produces / evidence
+  supports the dependency.
+- **Every node should have an acceptance handle:** `outputs`, `validators`,
+  `acceptanceCriteria`, or `openQuestions` explaining unresolved acceptance.
+  Nodes without any acceptance handle must not be marked low risk.
+- **If a node requires major internal planning by the subagent**, run one
+  refinement pass before writing the final spec.
+- **If a broad node cannot be safely split from source evidence**, mark it
+  high risk, add `openQuestions`, require `human-confirmation` gate, and
+  explain why it could not be split.
+- **If most implementation nodes require the strongest model**, run a
+  model-cost sanity review before finalizing model assignments. If strong
+  models remain justified, record the reason in the trace.
 
 ## Failure modes
 

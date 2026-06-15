@@ -350,6 +350,102 @@ test("buildGoalDagPlanningTrace records evidence transitions dependencies and mo
     assert.deepEqual(trace.openQuestions, ["Confirm final validator command"]);
     assert.doesNotThrow(() => JSON.parse(serializeGoalDagPlanningTrace(trace)));
 });
+test("buildGoalDagPlanningTrace records node quality with acceptance handles", () => {
+    const spec = {
+        objective: "x",
+        nodes: [
+            {
+                id: "a",
+                objective: "a",
+                outputs: ["file.ts"],
+                decompositionRationale: "Single bounded module, independently testable",
+            },
+            {
+                id: "b",
+                objective: "b",
+                acceptanceCriteria: ["Should produce a valid config file", "Should pass lint"],
+            },
+            {
+                id: "c",
+                objective: "c",
+                validators: ["npm test"],
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    assert.deepEqual(trace.nodeQuality[0], {
+        nodeId: "a",
+        acceptanceCriteria: [],
+        decompositionRationale: "Single bounded module, independently testable",
+    });
+    assert.deepEqual(trace.nodeQuality[1], {
+        nodeId: "b",
+        acceptanceCriteria: ["Should produce a valid config file", "Should pass lint"],
+    });
+    assert.deepEqual(trace.nodeQuality[2], {
+        nodeId: "c",
+        acceptanceCriteria: [],
+    });
+});
+test("buildGoalDagPlanningTrace warns on missing acceptance handle", () => {
+    const spec = {
+        objective: "x",
+        nodes: [{ id: "a", objective: "a" }],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    const acceptanceWarning = trace.warnings.find((w) => w.includes("No acceptance handle"));
+    assert.ok(acceptanceWarning, "expected acceptance handle warning");
+    assert.equal(trace.nodeQuality[0]?.warnings?.length, 1);
+});
+test("buildGoalDagFromSpec strips acceptance criteria from runtime DAG output", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                implementation: { model: "openai-codex/gpt-5.3-codex-spark" },
+            },
+            defaultSubagentScenario: "implementation",
+        },
+        nodes: [
+            {
+                id: "a",
+                objective: "a",
+                modelScenario: "implementation",
+                acceptanceCriteria: ["Should compile", "Should pass tests"],
+                decompositionRationale: "Bounded module work",
+            },
+        ],
+    });
+    const json = serializeGoalDagDocument(document);
+    assert.doesNotMatch(json, /acceptanceCriteria|decompositionRationale/);
+    assert.equal(validateGoalDagJson(json).nodes[0]?.id, "a");
+});
+test("build-dag CLI writes nodeQuality in planning trace with --trace", () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-dag-"));
+    try {
+        const specPath = join(dir, "spec.json");
+        const outPath = join(dir, "out.dag.json");
+        const tracePath = join(dir, "out.trace.json");
+        writeFileSync(specPath, JSON.stringify({
+            objective: "x",
+            nodes: [
+                {
+                    id: "a",
+                    objective: "a",
+                    acceptanceCriteria: ["Should work"],
+                },
+            ],
+        }), "utf8");
+        const result = spawnSync(process.execPath, [CLI_PATH, "build-dag", "--spec", specPath, "--out", outPath, "--trace", tracePath], { encoding: "utf8" });
+        assert.equal(result.status, 0, `cli failed: ${result.stderr}`);
+        const trace = JSON.parse(readFileSync(tracePath, "utf8"));
+        assert.equal(trace.nodeQuality[0].nodeId, "a");
+        assert.deepEqual(trace.nodeQuality[0].acceptanceCriteria, ["Should work"]);
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
 test("parseGoalDagSpecDocument rejects invalid planning metadata", () => {
     assert.throws(() => parseGoalDagSpecDocument({
         objective: "x",
@@ -359,6 +455,14 @@ test("parseGoalDagSpecDocument rejects invalid planning metadata", () => {
         objective: "x",
         nodes: [{ id: "a", objective: "a", evidence: [42] }],
     }), /nodes\[0\]\.evidence\[0\] must be a string or object/);
+    assert.throws(() => parseGoalDagSpecDocument({
+        objective: "x",
+        nodes: [{ id: "a", objective: "a", acceptanceCriteria: [""] }],
+    }), /nodes\[0\]\.acceptanceCriteria\[0\] must be a non-empty string/);
+    assert.throws(() => parseGoalDagSpecDocument({
+        objective: "x",
+        nodes: [{ id: "a", objective: "a", decompositionRationale: 42 }],
+    }), /nodes\[0\]\.decompositionRationale must be a string when present/);
 });
 test("buildGoalDagFromSpecFile writes a planning trace when requested", () => {
     const dir = mkdtempSync(join(tmpdir(), "goal-dag-"));

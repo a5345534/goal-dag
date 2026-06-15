@@ -40,6 +40,10 @@ export interface GoalDagSpecNode {
     evidence?: GoalDagSpecEvidence[];
     /** Spec-only explanation for the chosen model scenario. Stripped from runtime DAG output. */
     modelRationale?: string;
+    /** Spec-only acceptance criteria for review. Stripped from runtime DAG output. */
+    acceptanceCriteria?: string[];
+    /** Spec-only explanation for why this node is sufficiently decomposed. Stripped from runtime DAG output. */
+    decompositionRationale?: string;
 }
 /**
  * GoalDagSpec-side defaults.
@@ -99,6 +103,13 @@ export interface GoalDagPlanningTrace {
     modelAssignments: GoalDagPlanningTraceModelAssignment[];
     warnings: string[];
     openQuestions: string[];
+    nodeQuality: GoalDagPlanningTraceNodeQuality[];
+}
+export interface GoalDagPlanningTraceNodeQuality {
+    nodeId: string;
+    acceptanceCriteria: string[];
+    decompositionRationale?: string;
+    warnings?: string[];
 }
 export interface BuildGoalDagFromSpecFileOptions {
     /** Optional path for the producer-side planning trace sidecar JSON. */

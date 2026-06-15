@@ -54,6 +54,11 @@ export interface GoalDagSpecNode {
   evidence?: GoalDagSpecEvidence[];
   /** Spec-only explanation for the chosen model scenario. Stripped from runtime DAG output. */
   modelRationale?: string;
+
+  /** Spec-only acceptance criteria for review. Stripped from runtime DAG output. */
+  acceptanceCriteria?: string[];
+  /** Spec-only explanation for why this node is sufficiently decomposed. Stripped from runtime DAG output. */
+  decompositionRationale?: string;
 }
 
 /**
@@ -120,6 +125,14 @@ export interface GoalDagPlanningTrace {
   modelAssignments: GoalDagPlanningTraceModelAssignment[];
   warnings: string[];
   openQuestions: string[];
+  nodeQuality: GoalDagPlanningTraceNodeQuality[];
+}
+
+export interface GoalDagPlanningTraceNodeQuality {
+  nodeId: string;
+  acceptanceCriteria: string[];
+  decompositionRationale?: string;
+  warnings?: string[];
 }
 
 export interface BuildGoalDagFromSpecFileOptions {
@@ -246,6 +259,10 @@ export function buildGoalDagPlanningTrace(
     buildModelAssignmentRow(node.id, spec, nodesById.get(node.id), warnings),
   );
 
+  const nodeQuality = document.nodes.map((node) =>
+    buildNodeQualityRow(node.id, spec, nodesById.get(node.id), warnings),
+  );
+
   return {
     version: 1,
     objective: document.objective,
@@ -253,6 +270,7 @@ export function buildGoalDagPlanningTrace(
     transitions,
     dependencyReview,
     modelAssignments,
+    nodeQuality,
     warnings,
     openQuestions: [...(spec.openQuestions ?? [])],
   };
@@ -588,6 +606,36 @@ function buildModelAssignmentRow(
   };
 }
 
+function buildNodeQualityRow(
+  nodeId: string,
+  spec: GoalDagSpec,
+  node: GoalDagSpecNode | undefined,
+  globalWarnings: string[],
+): GoalDagPlanningTraceNodeQuality {
+  const warnings: string[] = [];
+  const acceptanceCriteria = [...(node?.acceptanceCriteria ?? [])];
+
+  const hasAcceptanceHandle =
+    (node?.outputs && node.outputs.length > 0) ||
+    (node?.validators && node.validators.length > 0) ||
+    acceptanceCriteria.length > 0 ||
+    (spec.openQuestions && spec.openQuestions.length > 0 && acceptanceCriteria.length === 0);
+
+  if (!hasAcceptanceHandle) {
+    const warning =
+      "No acceptance handle declared; confirm expected outputs, validators, or review criteria before execution.";
+    warnings.push(warning);
+    globalWarnings.push(`${nodeId}: ${warning}`);
+  }
+
+  return {
+    nodeId,
+    acceptanceCriteria,
+    ...(node?.decompositionRationale ? { decompositionRationale: node.decompositionRationale } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
+}
+
 function validatePlanningMetadata(input: unknown, path: string): void {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(`Invalid goal DAG spec: ${path} must be an object`);
@@ -596,8 +644,12 @@ function validatePlanningMetadata(input: unknown, path: string): void {
   validateOptionalStringArray(record.consumes, `${path}.consumes`);
   validateOptionalStringArray(record.produces, `${path}.produces`);
   validateEvidenceArray(record.evidence, `${path}.evidence`);
+  validateOptionalStringArray(record.acceptanceCriteria, `${path}.acceptanceCriteria`);
   if (record.modelRationale !== undefined && typeof record.modelRationale !== "string") {
     throw new Error(`Invalid goal DAG spec: ${path}.modelRationale must be a string when present`);
+  }
+  if (record.decompositionRationale !== undefined && typeof record.decompositionRationale !== "string") {
+    throw new Error(`Invalid goal DAG spec: ${path}.decompositionRationale must be a string when present`);
   }
 }
 
