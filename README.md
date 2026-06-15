@@ -1,12 +1,19 @@
 # goal-dag
 
-Plan [Goal DAG](https://github.com/a5345534/agent-goal-runtime) files from
-development documents for the [`agent-goal-runtime`](https://github.com/a5345534/agent-goal-runtime).
+`goal-dag` is the **Stage 2 Goal DAG producer** in the three-stage agent pipeline:
 
-The runtime accepts a strict JSON DAG file via `/goal --dag <path>`. Writing
-that JSON by hand is error-prone (kebab-case ids, acyclic dependencies,
-model-scenario referential integrity, etc.). This package adds a thin
-**Goal DAG producer layer** on top of the runtime:
+```text
+OpenSpec / PRD / design doc / ticket
+→ GoalDagSpec
+→ validated <name>.dag.json
+→ optional <name>.trace.json
+→ goal-runner stage via /goal --dag <path>
+```
+
+The Stage 3 runner accepts a strict JSON DAG file via `/goal --dag <path>`.
+Writing that JSON by hand is error-prone (kebab-case ids, acyclic dependencies,
+model-scenario referential integrity, etc.). This package adds a thin producer
+layer before the runner:
 
 - A programmatic `GoalDagSpec` builder API.
 - A small CLI: `goal-dag build-dag --spec <in> --out <out> [--trace <trace>]`.
@@ -14,15 +21,16 @@ model-scenario referential integrity, etc.). This package adds a thin
   spec from a PRD, design doc, or OpenSpec change, assign models from
   a catalog, and emit a valid DAG file.
 
-The runtime stays the source of truth for the DAG schema and validation.
+The runner runtime stays the source of truth for the DAG schema and validation.
 This package only does two things:
 
 1. Reads a spec (which the agent or a script produces).
-2. Composes a draft DAG file from the spec and round-trips it through
-   `agent-goal-runtime`'s `parseGoalDagFileDocument()` — the runtime
-   parser is the single source of truth for id pattern, dependency
-   existence, self-dependency, cycle, and model-scenario referential
-   integrity. The builder refuses to write an invalid DAG.
+2. Composes a draft DAG file from the spec and round-trips it through the
+   runner parser, currently imported from the historical/internal
+   `agent-goal-runtime` package as `parseGoalDagFileDocument()`. The parser is
+   the single source of truth for id pattern, dependency existence,
+   self-dependency, cycle, model-scenario referential integrity, and runtime
+   DAG field validation. The builder refuses to write an invalid DAG.
 
 For reviewability, `GoalDagSpec` may also carry spec-only planning metadata
 (`consumes`, `produces`, `evidence`, `modelRationale`, `acceptanceCriteria`,
@@ -30,6 +38,19 @@ For reviewability, `GoalDagSpec` may also carry spec-only planning metadata
 those fields from the runtime DAG and can write a separate planning trace
 sidecar JSON. When `openQuestions` are used as a node acceptance handle, prefix
 the question with `<node-id>:` so the trace can be reviewed against that node.
+
+## Naming note: goal-runner and agent-goal-runtime
+
+User-facing docs use **goal-runner** for the Stage 3 runner that consumes
+`/goal --dag <path>`. The current npm/git dependency remains
+`agent-goal-runtime` because that is the historical package name exporting the
+DAG parser and runtime types consumed by goal-runner. In this repository:
+
+- `goal-dag` is Stage 2 and only produces validated DAG JSON plus optional trace
+  JSON.
+- `goal-runner` is Stage 3 and executes DAGs through `/goal --dag <path>`.
+- `agent-goal-runtime` is the implementation package name used for imports and
+  dependency pinning until the runtime package is renamed.
 
 ## Install
 
@@ -48,9 +69,10 @@ pi update git:github.com/a5345534/goal-dag
 pi update
 ```
 
-The runtime dependency is pinned via `goal-dag`'s own `package.json`
-to `github:a5345534/agent-goal-runtime#v0.1.5`, so a single install or update
-brings in the whole stack.
+The runtime implementation dependency is pinned via `goal-dag`'s own
+`package.json` to `github:a5345534/agent-goal-runtime#v0.1.5`, so a single
+install or update brings in the Stage 2 producer plus the Stage 3 parser/runtime
+API it validates against.
 
 For a local-development checkout:
 
@@ -76,12 +98,16 @@ Then add the local path to `~/.pi/agent/settings.json` (or project
 # 1. Write a spec.json (the agent fills this in via the /skill:goal-dag workflow)
 # 2. Build a validated DAG file plus optional planning trace:
 npx goal-dag build-dag --spec spec.json --out goal.dag.json --trace goal.trace.json
-# 3. Hand it to the runtime:
+# 3. Hand the file to the goal-runner stage yourself:
 /goal --dag goal.dag.json
 ```
 
 The CLI is a thin wrapper over `buildGoalDagFromSpecFile()` from
-`goal-dag`'s public API.
+`goal-dag`'s public API. It does not execute `/goal`, create worktrees, run
+validators, manage subagents, decide goal completion/blocked, modify
+implementation files, or modify OpenSpec source packages.
+
+Producer-side schema reference: [`schemas/goal-dag-spec.schema.json`](schemas/goal-dag-spec.schema.json).
 
 ## Programmatic API
 
@@ -114,6 +140,12 @@ const spec: GoalDagSpec = {
     {
       id: "integration-validation",
       objective: "Run integrated validation",
+      kind: "validation",
+      validation: {
+        profile: "code-change",
+        testSpecNodeId: "attendance-parity",
+        diffBaseRef: "main",
+      },
       after: ["attendance-parity", "payroll-doctypes"],
       consumes: ["attendance fixtures complete", "payroll doctypes complete"],
       produces: ["integrated validation complete"],
@@ -138,6 +170,24 @@ not put `.worktrees/<slug>/...` in artifact paths.
 Spec-only planning fields are accepted for trace generation but are never emitted
 in the runtime DAG JSON. Use them to explain dependencies, acceptance criteria,
 decomposition rationale, unresolved node-level questions, and model choices.
+Runtime fields such as `kind`, `validation`, `thinkingLevel`, `workspace`,
+`completionGates`, and `modelScenario` are preserved in the emitted DAG and
+validated by the runner parser.
+
+## Producer boundary
+
+`goal-dag` is intentionally Stage 2 only. It must not:
+
+- Execute `/goal --dag`.
+- Manage subagents or create worktrees.
+- Run runtime validators.
+- Decide goal completion or blocked state.
+- Modify implementation files.
+- Create or modify OpenSpec source packages.
+- Preserve producer-only trace metadata in the runtime DAG JSON.
+
+Every emitted DAG JSON is validated by the runner parser before it is shown as
+ready for handoff.
 
 ## Pi skill
 
@@ -166,7 +216,7 @@ The skill walks the agent through:
 7. Writing the `GoalDagSpec` JSON with spec-only planning metadata for traceability.
 8. Running the CLI to build a parser-valid DAG file and trace sidecar.
 9. Showing the user the resulting DAG, `nodeQuality` trace warnings/open questions,
-   and offering `/goal --dag <out.dag.json>`.
+   and the exact `/goal --dag <out.dag.json>` handoff command without executing it.
 
 ## Model catalog
 
@@ -188,12 +238,13 @@ Schema: [`schemas/model-catalog.schema.json`](schemas/model-catalog.schema.json)
 ## Architecture
 
 See [`docs/architecture-decision.md`](docs/architecture-decision.md) for
-the rationale behind splitting this Goal DAG producer out of `agent-goal-runtime`
-and the runtime API surface `goal-dag` depends on.
+the rationale behind splitting this Stage 2 Goal DAG producer out from the Stage
+3 runner/runtime API surface it depends on.
 
 ```
 ┌────────────────────────────────────────┐
-│  agent-goal-runtime                    │
+│  goal-runner stage                     │
+│  (agent-goal-runtime package today)    │
 │  - parseGoalDagFileDocument (parser)   │
 │  - GoalDagFileDocument / types         │
 └────────────────────────────────────────┘
@@ -210,11 +261,12 @@ and the runtime API surface `goal-dag` depends on.
 └────────────────────────────────────────┘
 ```
 
-The runtime owns the schema and validation. `goal-dag` owns the
-"how do I extract a DAG from a document" prompt / script / agentic
-workflow and the optional planning trace sidecar. New document-to-DAG workflows
-(Linear tickets, Jira epics, OpenSpec changes) can ship as additional skills or
-scripts under this package without touching the runtime.
+The goal-runner runtime owns the schema, validation, scheduling, validator
+execution, completion decisions, and subagent orchestration. `goal-dag` owns the
+"how do I extract a DAG from a document" prompt / script / agentic workflow and
+the optional planning trace sidecar. New document-to-DAG workflows (Linear
+tickets, Jira epics, OpenSpec changes) can ship as additional skills or scripts
+under this package without touching the runner.
 
 ## Development
 
@@ -247,14 +299,16 @@ to catch stale artifacts at release time.
 
 ### Runtime dependency
 
-The package depends on `agent-goal-runtime` via a git ref:
+The package depends on the current runtime implementation package
+`agent-goal-runtime` via a git ref:
 
 ```json
-"agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.1"
+"agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.5"
 ```
 
-Pin to a tag (or a commit) so `goal-dag` releases are reproducible. The
-runtime API surface `goal-dag` depends on:
+This package is consumed by the user-facing goal-runner stage today. Pin to a
+tag (or a commit) so `goal-dag` releases are reproducible. The runtime API
+surface `goal-dag` depends on:
 
 - `parseGoalDagFileDocument` (parser + validator)
 - `GoalDagFileDocument`, `GoalDagFileNode`, `GoalDagFileDefaults`,

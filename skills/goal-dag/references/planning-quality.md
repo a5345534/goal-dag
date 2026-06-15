@@ -238,4 +238,4 @@ Encode only supported runtime fields:
 - Acceptance review → `acceptanceCriteria` and `decompositionRationale` preserved only in the trace.
 - Human review requirements → `completionGates` only when supported by the active runtime policy; otherwise warn the user and require manual review before offering `/goal --dag`.
 
-Always build with `--trace <out.trace.json>` for non-trivial DAGs and show trace warnings/open questions before starting `/goal --dag`.
+Always build with `--trace <out.trace.json>` for non-trivial DAGs and show trace warnings/open questions before handing the DAG to the goal-runner stage. `goal-dag` itself must not execute `/goal --dag`.

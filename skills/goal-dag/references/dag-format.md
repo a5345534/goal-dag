@@ -1,10 +1,18 @@
 # Goal DAG file format
 
-This is a quick reference for the agent-goal-runtime DAG file. The full spec
-lives at:
+This is a quick reference for the Goal DAG file consumed by the Stage 3
+**goal-runner** runtime via `/goal --dag <path>`. The current implementation
+package is still named `agent-goal-runtime`; it exports the parser and types that
+`goal-dag` round-trips through.
+
+Full runtime references:
 
 - Schema: <https://github.com/a5345534/agent-goal-runtime/blob/main/schemas/goal-dag.schema.json>
 - User-facing format doc: <https://github.com/a5345534/agent-goal-runtime/blob/main/docs/goal-dag-format.md>
+
+Producer-side schema reference:
+
+- `schemas/goal-dag-spec.schema.json`
 
 ## Runtime DAG root fields
 
@@ -27,11 +35,14 @@ lives at:
 | `validators` | no | string array | Shell validators for controller validation. |
 | `conflicts` | no | object | File / module / capability conflict hints for scheduler serialization. |
 | `scope` | no | string | Human-readable scope label. |
+| `kind` | no | string | Runtime node kind, for example `implementation`, `validation`, `review`, or another kind supported by the active runner policy. |
+| `validation` | no | object | Runtime validation contract, for example `profile`, `testSpecNodeId`, `approvedByNodeId`, `artifactLocks`, `requiredEvidence`, and `diffBaseRef`. |
 | `workspaceStrategy` | no | string | Workspace allocation strategy. Defaults to native Git worktree in Pi. |
 | `workspace` | no | object | Deterministic node worktree binding: `worktreeSlug`, optional `branch`, optional `baseRef`. For native-git nodes, `goal-dag` emits `worktreeSlug: <node id>` when omitted. |
 | `risk` | no | `low` / `medium` / `high` | Risk label for scheduling / model-routing / review policy. |
 | `completionGates` | no | string array | Completion gates. Defaults to `controller-validation`. Only use policy-specific gates that the active runtime/controller actually enforces; otherwise require manual user review outside the DAG. |
 | `modelScenario` | no | scenario id | Explicit model-routing scenario for this node. |
+| `thinkingLevel` | no | string | Pi thinking level for the node subagent session, when supported by the runner adapter. |
 
 ## Validation rules `goal-dag` must respect
 
@@ -41,6 +52,8 @@ lives at:
 - `id` is unique and kebab-case.
 - `after` references existing node ids and never includes the node itself.
 - The graph is acyclic.
+- `kind` and `validation` are runtime fields and pass through from `GoalDagSpec` into the emitted DAG.
+- `validation.testSpecNodeId`, `validation.approvedByNodeId`, and validation artifact-lock node ids must be kebab-case node ids when present.
 - `modelScenario` references an entry in `modelRouting.scenarios` (when
   `modelRouting` is declared) — or `modelRouting` must declare the scenario.
 - **Model ID canonical format**: all `model` fields in `modelRouting.scenarios`
@@ -73,7 +86,9 @@ Use `--trace <path>` to write the sidecar:
 goal-dag build-dag --spec spec.json --out goal.dag.json --trace goal.trace.json
 ```
 
-The runtime DAG JSON will not contain these fields.
+The runtime DAG JSON will not contain these fields. It may contain runtime fields
+such as `kind`, `validation`, `thinkingLevel`, `workspace`, `completionGates`,
+and `modelScenario`.
 
 The planning trace sidecar includes a `nodeQuality` array with per-node review metadata:
 
@@ -114,6 +129,12 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
     {
       "id": "integration-validation",
       "objective": "Run integrated validation",
+      "kind": "validation",
+      "validation": {
+        "profile": "code-change",
+        "testSpecNodeId": "attendance-parity",
+        "diffBaseRef": "main"
+      },
       "after": ["attendance-parity", "payroll-doctypes"],
       "consumes": ["attendance fixtures complete", "payroll doctypes complete"],
       "produces": ["integrated validation complete"],
@@ -130,6 +151,6 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
 
 ## Why no inferred sequencing
 
-The runtime does not auto-wire `after` between nodes. If the document lists
-items as bullets without ordering, leave them as parallel nodes. Only wire
-`after` when the document explicitly says one step depends on another.
+The goal-runner runtime does not auto-wire `after` between nodes. If the
+document lists items as bullets without ordering, leave them as parallel nodes.
+Only wire `after` when the document explicitly says one step depends on another.

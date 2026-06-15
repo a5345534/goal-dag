@@ -24,6 +24,8 @@ export interface GoalDagSpecNode {
     validators?: string[];
     conflicts?: GoalDagConflictHints;
     scope?: string;
+    kind?: GoalDagFileNode["kind"];
+    validation?: GoalDagFileNode["validation"];
     workspaceStrategy?: string;
     /** Deterministic node worktree/branch binding. Native-git nodes default worktreeSlug to node id when omitted. */
     workspace?: GoalDagNodeWorkspaceBinding;

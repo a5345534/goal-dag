@@ -2,10 +2,11 @@
   "name": "goal-dag",
   "version": "0.1.0",
   "type": "module",
-  "description": "Plan Goal DAG files from development documents for the agent-goal-runtime.",
+  "description": "Stage 2 producer for Goal DAG files consumed by the goal-runner stage.",
   "keywords": [
     "pi-package",
     "goal-dag",
+    "goal-runner",
     "agent-goal-runtime"
   ],
   "main": "./dist/index.js",

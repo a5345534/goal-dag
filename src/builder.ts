@@ -37,6 +37,8 @@ export interface GoalDagSpecNode {
   validators?: string[];
   conflicts?: GoalDagConflictHints;
   scope?: string;
+  kind?: GoalDagFileNode["kind"];
+  validation?: GoalDagFileNode["validation"];
   workspaceStrategy?: string;
   /** Deterministic node worktree/branch binding. Native-git nodes default worktreeSlug to node id when omitted. */
   workspace?: GoalDagNodeWorkspaceBinding;
@@ -336,6 +338,8 @@ function cloneNode(node: GoalDagSpecNode, defaultRisk: GoalDagNode["risk"] | und
   if (node.validators) out.validators = [...node.validators];
   if (node.conflicts) out.conflicts = cloneConflicts(node.conflicts);
   if (node.scope !== undefined) out.scope = node.scope;
+  if (node.kind !== undefined) out.kind = node.kind;
+  if (node.validation !== undefined) out.validation = cloneValidationContract(node.validation);
   if (node.workspaceStrategy !== undefined) out.workspaceStrategy = node.workspaceStrategy;
   if (workspace) out.workspace = workspace;
   if (node.risk !== undefined) out.risk = node.risk;
@@ -404,6 +408,23 @@ function cloneConflicts(conflicts: GoalDagConflictHints): GoalDagConflictHints {
   if (conflicts.files) out.files = [...conflicts.files];
   if (conflicts.modules) out.modules = [...conflicts.modules];
   if (conflicts.capabilities) out.capabilities = [...conflicts.capabilities];
+  return out;
+}
+
+function cloneValidationContract(
+  validation: NonNullable<GoalDagFileNode["validation"]>,
+): NonNullable<GoalDagFileNode["validation"]> {
+  const out: NonNullable<GoalDagFileNode["validation"]> = {};
+  if (validation.profile !== undefined) out.profile = validation.profile;
+  if (validation.testSpecNodeId !== undefined) out.testSpecNodeId = validation.testSpecNodeId;
+  if (validation.approvedByNodeId !== undefined) out.approvedByNodeId = validation.approvedByNodeId;
+  if (validation.artifactLocks) {
+    out.artifactLocks = validation.artifactLocks.map((lock) => ({ ...lock }));
+  }
+  if (validation.requiredEvidence) out.requiredEvidence = [...validation.requiredEvidence];
+  if (validation.onAuditTestGap !== undefined) out.onAuditTestGap = validation.onAuditTestGap;
+  if (validation.diffBaseRef !== undefined) out.diffBaseRef = validation.diffBaseRef;
+  if (validation.auditReportPaths) out.auditReportPaths = [...validation.auditReportPaths];
   return out;
 }
 

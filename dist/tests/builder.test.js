@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildGoalDagFromSpec, buildGoalDagFromSpecFile, buildGoalDagPlanningTrace, parseGoalDagSpec, parseGoalDagSpecDocument, serializeGoalDagDocument, serializeGoalDagPlanningTrace, validateGoalDagJson, } from "../index.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, "..", "..");
 const CLI_PATH = resolve(HERE, "..", "scripts", "build-dag.js");
 const baseSpec = {
     objective: "Complete People Frappe backend remaining slices",
@@ -70,6 +71,65 @@ test("buildGoalDagFromSpec produces a runtime-valid document", () => {
     const json = serializeGoalDagDocument(document);
     const reparsed = validateGoalDagJson(json);
     assert.equal(reparsed.objective, document.objective);
+});
+test("buildGoalDagFromSpec passes through node kind and validation contract", () => {
+    const validation = {
+        profile: "code-change",
+        testSpecNodeId: "write-feature-tests",
+        approvedByNodeId: "review-feature-tests",
+        artifactLocks: [
+            {
+                path: "src/feature.ts",
+                sha256: "a".repeat(64),
+                sourceNodeId: "write-feature-tests",
+            },
+        ],
+        requiredEvidence: ["tests pass"],
+        diffBaseRef: "main",
+    };
+    const spec = {
+        objective: "x",
+        nodes: [
+            { id: "write-feature-tests", objective: "Write feature tests" },
+            { id: "review-feature-tests", objective: "Review feature tests" },
+            {
+                id: "implement-feature",
+                objective: "Implement feature",
+                kind: "implementation",
+                validation,
+            },
+        ],
+    };
+    const document = buildGoalDagFromSpec(spec);
+    const node = document.nodes.find((item) => item.id === "implement-feature");
+    assert.equal(node?.kind, "implementation");
+    assert.deepEqual(node?.validation, validation);
+    validation.requiredEvidence?.push("mutated after build");
+    if (validation.artifactLocks?.[0])
+        validation.artifactLocks[0].path = "mutated.ts";
+    assert.deepEqual(node?.validation?.requiredEvidence, ["tests pass"]);
+    assert.equal(node?.validation?.artifactLocks?.[0]?.path, "src/feature.ts");
+});
+test("serializeGoalDagDocument includes kind implementation and validation contract", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        nodes: [
+            {
+                id: "implement-feature",
+                objective: "Implement feature",
+                kind: "implementation",
+                validation: {
+                    profile: "code-change",
+                    requiredEvidence: ["unit tests pass"],
+                    diffBaseRef: "main",
+                },
+            },
+        ],
+    });
+    const json = serializeGoalDagDocument(document);
+    assert.match(json, /"kind": "implementation"/);
+    assert.match(json, /"validation"/);
+    assert.equal(validateGoalDagJson(json).nodes[0]?.validation?.profile, "code-change");
 });
 test("buildGoalDagFromSpec forwards parser errors from the runtime", () => {
     assert.throws(() => buildGoalDagFromSpec({
@@ -282,6 +342,7 @@ test("parseGoalDagSpecDocument accepts valid defaults.risk values", () => {
 test("buildGoalDagFromSpec strips spec-only planning metadata from runtime DAG output", () => {
     const document = buildGoalDagFromSpec({
         objective: "x",
+        openQuestions: ["a: Confirm expected acceptance criteria"],
         modelRouting: {
             scenarios: {
                 implementation: { model: "openai-codex/gpt-5.3-codex-spark" },
@@ -297,11 +358,13 @@ test("buildGoalDagFromSpec strips spec-only planning metadata from runtime DAG o
                 evidence: [{ id: "ev-a", source: "prd.md#A", quote: "Do A first" }],
                 modelScenario: "implementation",
                 modelRationale: "Low-risk implementation under 128K context",
+                acceptanceCriteria: ["implementation complete"],
+                decompositionRationale: "Single bounded implementation node",
             },
         ],
     });
     const json = serializeGoalDagDocument(document);
-    assert.doesNotMatch(json, /consumes|produces|modelRationale|ev-a/);
+    assert.doesNotMatch(json, /openQuestions|consumes|produces|evidence|modelRationale|acceptanceCriteria|decompositionRationale|ev-a/);
     assert.equal(validateGoalDagJson(json).nodes[0]?.id, "a");
 });
 test("buildGoalDagPlanningTrace records evidence transitions dependencies and models", () => {
@@ -504,6 +567,17 @@ test("buildGoalDagFromSpecFile writes a planning trace when requested", () => {
         rmSync(dir, { recursive: true, force: true });
     }
 });
+test("buildGoalDagFromSpec rejects invalid modelScenario through the runtime parser", () => {
+    assert.throws(() => buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                impl: { model: "openai-codex/gpt-5.3-codex-spark" },
+            },
+        },
+        nodes: [{ id: "a", objective: "a", modelScenario: "missing" }],
+    }), /modelScenario.*missing|unknown model scenario|must reference/i);
+});
 test("buildGoalDagFromSpec rejects dot-separated model IDs", () => {
     assert.throws(() => buildGoalDagFromSpec({
         objective: "x",
@@ -572,5 +646,21 @@ test("build-dag CLI writes planning trace with --trace", () => {
     finally {
         rmSync(dir, { recursive: true, force: true });
     }
+});
+test("GoalDagSpec schema documents kind validation and spec-only metadata", () => {
+    const schema = JSON.parse(readFileSync(resolve(REPO_ROOT, "schemas", "goal-dag-spec.schema.json"), "utf8"));
+    const nodeProperties = schema.$defs.node.properties;
+    assert.ok(nodeProperties.kind, "schema should document runtime node kind");
+    assert.ok(nodeProperties.validation, "schema should document runtime validation contract");
+    assert.ok(nodeProperties.acceptanceCriteria, "schema should document spec-only acceptanceCriteria");
+    assert.ok(nodeProperties.decompositionRationale, "schema should document spec-only decompositionRationale");
+});
+test("goal-dag skill documents OpenSpec change directory input contract", () => {
+    const skill = readFileSync(resolve(REPO_ROOT, "skills", "goal-dag", "SKILL.md"), "utf8");
+    assert.match(skill, /## OpenSpec Change Input Contract/);
+    assert.match(skill, /Read `source-manifest\.json` first/);
+    assert.match(skill, /Do not treat `change-explainer\.html` as authoritative/);
+    assert.match(skill, /Do not read `\.goal-spec\/` workflow artifacts as source of truth/);
+    assert.match(skill, /must not say "Create an\s+OpenSpec change"/);
 });
 //# sourceMappingURL=builder.test.js.map

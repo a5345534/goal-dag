@@ -1,41 +1,42 @@
 # Architecture decision: why `goal-dag` is a separate repository
 
 > Status: accepted 2026-06-04
-> Applies to: `a5345534/goal-dag` and the `agent-goal-runtime` API surface it depends on
+> Applies to: `a5345534/goal-dag` and the Stage 3 goal-runner runtime API surface it depends on
 
 ## Context
 
-`agent-goal-runtime` defines a strict JSON DAG file format that
-`/goal --dag <path>` consumes (see
-[`docs/goal-dag-format.md`](https://github.com/a5345534/agent-goal-runtime/blob/main/docs/goal-dag-format.md)).
-Writing that JSON by hand is error-prone — kebab-case ids, acyclic
-dependencies, model-scenario referential integrity, expected outputs,
-validators, conflict hints — and users who want to drive `/goal` from
-a free-form development document (PRD, design doc, OpenSpec change)
-should not have to learn the schema just to get started.
+The Stage 3 **goal-runner** runtime defines a strict JSON DAG file format that
+`/goal --dag <path>` consumes. The current implementation package is still named
+`agent-goal-runtime`, and it exports the parser/types used by this repository
+(see [`docs/goal-dag-format.md`](https://github.com/a5345534/agent-goal-runtime/blob/main/docs/goal-dag-format.md)).
+Writing that JSON by hand is error-prone — kebab-case ids, acyclic dependencies,
+model-scenario referential integrity, expected outputs, validation contracts,
+validators, conflict hints — and users who want to drive `/goal` from a
+free-form development document (PRD, design doc, OpenSpec change) should not
+have to learn the schema just to get started.
 
 We considered two designs for closing that gap:
 
-1. **A Goal DAG producer built into `agent-goal-runtime`.** The runtime
-   would expose a `buildGoalDagDocumentFromSpec()` API; user / agent code
-   could compose a `GoalDagSpec` and hand it to the runtime to produce
-   a validated DAG file.
-2. **A Goal DAG producer as a separate package.** The runtime would stay a
-   consumer of DAG files (parser, validator, scheduler). The producer
-   package would own the write side: parsing a spec, composing a draft
-   document, round-tripping it through the runtime's parser for
-   validation, and writing the file.
+1. **A Goal DAG producer built into the goal-runner runtime package.** The
+   runtime would expose a `buildGoalDagDocumentFromSpec()` API; user / agent
+   code could compose a `GoalDagSpec` and hand it to the runtime to produce a
+   validated DAG file.
+2. **A Goal DAG producer as a separate package.** The runner would stay a
+   consumer of DAG files (parser, validator, scheduler). The producer package
+   would own the write side: parsing a spec, composing a draft document,
+   round-tripping it through the runner parser for validation, and writing the
+   file.
 
 ## Decision
 
 We chose (2). `goal-dag` lives in a separate repository
-(`a5345534/goal-dag`), depends on
-`agent-goal-runtime@^0.1.1`, and owns the producer side end-to-end.
-The runtime owns the consumer side and exposes only:
+(`a5345534/goal-dag`), depends on the current runtime implementation package
+`agent-goal-runtime` pinned by git ref, and owns the Stage 2 producer side
+end-to-end. The goal-runner runtime owns the consumer side and exposes only:
 
 - `parseGoalDagFileDocument` — parser + validator (id pattern,
   dependency existence, self-dependency, cycle, model-scenario
-  referential integrity, etc.)
+  referential integrity, runtime `kind` / `validation` field shape, etc.)
 - The `GoalDagFileDocument` / `GoalDagFileNode` / `GoalDagFileDefaults`
   / `GoalDagConflictHints` / `GoalDagNode` / `GoalModelRoutingConfig`
   types.
@@ -43,15 +44,16 @@ The runtime owns the consumer side and exposes only:
 A small Pi skill (`/skill:goal-dag`) ships in the `goal-dag`
 package; it teaches an agent to read a development document, extract
 a `GoalDagSpec`, and call the `goal-dag` CLI to produce a DAG file
-ready for `/goal --dag <path>` plus an optional planning trace sidecar for
-review.
+ready for handoff to the goal-runner stage via `/goal --dag <path>` plus an
+optional planning trace sidecar for review. The skill shows the handoff command
+but does not execute it.
 
 ## Consequences
 
 ### Runtime stays lean
 
-- The runtime's API surface remains "I can read this DAG file." It
-  does not know about specs, producer packages, or document formats.
+- The goal-runner runtime API surface remains "I can read and execute this DAG
+  file." It does not know about specs, producer packages, or document formats.
 - `node:fs` is no longer pulled into the core module path
   (an earlier draft had a `writeGoalDagFileFromSpec` in the runtime;
   moving the producer side out removed that dep).
@@ -69,23 +71,24 @@ review.
   `modelRationale`, `acceptanceCriteria`, `decompositionRationale`, and
   root-level `openQuestions`) is stripped before runtime validation and may be
   emitted separately by `buildGoalDagPlanningTrace()`.
-- The cycle detection added in `agent-goal-runtime@0.1.1` is the
-  same check `goal-dag` surfaces to the user before the file is
-  written.
+- The runner parser's checks are the same checks `goal-dag` surfaces to the
+  user before the file is written.
 
 ### The dependency surface is small and explicit
 
 ```json
 {
   "dependencies": {
-    "agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.1"
+    "agent-goal-runtime": "github:a5345534/agent-goal-runtime#v0.1.5"
   }
 }
 ```
 
-Pinned to a tag, not a range, so `goal-dag` releases are reproducible
-and the runtime's release cadence does not silently pull breaking
-changes into `goal-dag`.
+Pinned to a tag or commit, not a range, so `goal-dag` releases are reproducible
+and the runner runtime's release cadence does not silently pull breaking
+changes into `goal-dag`. User-facing docs call this Stage 3 **goal-runner**;
+`agent-goal-runtime` is the current implementation package name used for imports
+and dependency pinning.
 
 ### The skill is prompt + reference heavy, code-light
 
@@ -96,8 +99,10 @@ changes into `goal-dag`.
   required modalities. This is intentionally LLM judgment, not a hard-coded
   heuristic.
 - The CLI (`goal-dag build-dag --spec ... --out ... [--trace ...]`) is a
-  thin shell over the spec parser, the runtime round-trip, and optional trace
-  sidecar generation (mechanical work, deterministic code).
+  thin shell over the spec parser, the runner parser round-trip, and optional
+  trace sidecar generation (mechanical work, deterministic code). It does not
+  run `/goal`, validators, subagents, worktree creation, implementation edits,
+  or OpenSpec source package changes.
 - The `references/` directory has DAG format, model-routing, and
   model-catalog examples for the agent to load on demand.
 
@@ -121,7 +126,7 @@ Project-specific catalogs can override the package default through
 
 ### The build artifact is committed
 
-`dist/` is **committed to the repo**, not gitignored. The runtime
+`dist/` is **committed to the repo**, not gitignored. The runtime implementation
 package uses the same policy. The reason is concrete:
 
 `pi install` runs `npm install --omit=dev`, so `tsc` is not on PATH
@@ -149,10 +154,10 @@ change. The `prepack` hook still rebuilds on `npm pack` /
 │        │ reads                        │ round-trips            │
 │        │                              ▼                        │
 │   ┌────────────┐              ┌─────────────────┐              │
-│   │  Dev doc   │              │  agent-goal-    │              │
-│   │  (PRD,     │              │  runtime        │              │
-│   │  OpenSpec, │              │  parseGoalDag   │              │
-│   │  etc.)     │              │  FileDocument   │              │
+│   │  Dev doc   │              │  goal-runner    │              │
+│   │  (PRD,     │              │  parser         │              │
+│   │  OpenSpec, │              │  (agent-goal-   │              │
+│   │  etc.)     │              │  runtime pkg)   │              │
 │   └────────────┘              └─────────────────┘              │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
@@ -162,7 +167,7 @@ change. The `prepack` hook still rebuilds on `npm pack` /
                                        ▼
 
                                 ┌─────────────────┐
-                                │  /goal          │
+                                │  goal-runner    │
                                 │  controller +   │
                                 │  subagent       │
                                 │  orchestration  │
@@ -175,9 +180,9 @@ If a future producer workflow needs the runtime to ship its own builder helper
 (for example, to give the Pi adapter a one-call "spec → orchestrable
 DAG" path that bypasses the file system), the right move is to:
 
-1. Promote `buildGoalDagDocumentFromSpec` to a stable runtime export
+1. Promote `buildGoalDagDocumentFromSpec` to a stable runner/runtime export
    behind a `GoalDagSpec` type that the runtime also owns.
-2. Bump the runtime's major version and `goal-dag`'s dep range.
+2. Bump the runner/runtime major version and `goal-dag`'s dep range.
 3. Have the `goal-dag` CLI keep its current behavior as a thin
    wrapper, so existing skill workflows do not change.
 

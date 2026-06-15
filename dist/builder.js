@@ -166,6 +166,10 @@ function cloneNode(node, defaultRisk, defaultWorkspaceStrategy) {
         out.conflicts = cloneConflicts(node.conflicts);
     if (node.scope !== undefined)
         out.scope = node.scope;
+    if (node.kind !== undefined)
+        out.kind = node.kind;
+    if (node.validation !== undefined)
+        out.validation = cloneValidationContract(node.validation);
     if (node.workspaceStrategy !== undefined)
         out.workspaceStrategy = node.workspaceStrategy;
     if (workspace)
@@ -246,6 +250,27 @@ function cloneConflicts(conflicts) {
         out.modules = [...conflicts.modules];
     if (conflicts.capabilities)
         out.capabilities = [...conflicts.capabilities];
+    return out;
+}
+function cloneValidationContract(validation) {
+    const out = {};
+    if (validation.profile !== undefined)
+        out.profile = validation.profile;
+    if (validation.testSpecNodeId !== undefined)
+        out.testSpecNodeId = validation.testSpecNodeId;
+    if (validation.approvedByNodeId !== undefined)
+        out.approvedByNodeId = validation.approvedByNodeId;
+    if (validation.artifactLocks) {
+        out.artifactLocks = validation.artifactLocks.map((lock) => ({ ...lock }));
+    }
+    if (validation.requiredEvidence)
+        out.requiredEvidence = [...validation.requiredEvidence];
+    if (validation.onAuditTestGap !== undefined)
+        out.onAuditTestGap = validation.onAuditTestGap;
+    if (validation.diffBaseRef !== undefined)
+        out.diffBaseRef = validation.diffBaseRef;
+    if (validation.auditReportPaths)
+        out.auditReportPaths = [...validation.auditReportPaths];
     return out;
 }
 function cloneModelRouting(config) {

@@ -1,23 +1,33 @@
 ---
 name: goal-dag
-description: Read a development document (PRD, OpenSpec change, design doc, ticket description) and produce a valid Goal DAG JSON file consumable by `/goal --dag`. Use when the user has a multi-step plan document and wants to drive the `agent-goal-runtime` from it instead of writing DAG JSON by hand.
+description: Stage 2 producer that reads a development document (PRD, OpenSpec change, design doc, ticket description) and produces a valid Goal DAG JSON file for handoff to the goal-runner stage via `/goal --dag`. Use when the user has a multi-step plan document and wants a validated DAG JSON instead of writing it by hand.
 ---
 
 # Goal DAG
 
 This skill teaches the agent to convert a free-form development document into a
-[Goal DAG](references/dag-format.md) JSON file that `agent-goal-runtime` can execute
-via `/goal --dag <path>`.
+[Goal DAG](references/dag-format.md) JSON file for the Stage 3 **goal-runner**
+handoff command:
+
+```text
+/goal --dag <path>
+```
+
+The current runtime implementation package is still named `agent-goal-runtime`;
+it exports the parser/types consumed by goal-runner and used by `goal-dag` for
+round-trip validation. `goal-dag` is Stage 2 only: it produces a validated DAG
+JSON plus optional trace JSON, but it does not execute `/goal`.
 
 The skill is intentionally **prompt + reference heavy, code-light**. The agent
-performs the creative steps: extracting milestones from the document and assigning
-models from the catalog. Deterministic code then turns the `GoalDagSpec` into a
-DAG file and round-trips it through `agent-goal-runtime`'s parser for validation.
+performs the creative steps: extracting milestones from the document and
+assigning models from the catalog. Deterministic code then turns the
+`GoalDagSpec` into a DAG file and round-trips it through the runner parser for
+validation.
 
 ## When to load this skill
 
 - The user has a markdown / text document describing a multi-step plan and
-  wants `/goal` to execute it.
+  wants a validated DAG JSON for handoff to goal-runner.
 - The user wants to refactor a goal that started as a single objective into
   a multi-node DAG.
 - The user wants to add a known good set of validators, expected outputs, and
@@ -26,23 +36,98 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 ## When **not** to load this skill
 
 - The user only has a one-liner objective → use `/goal <objective>` directly.
-- The user has already written a DAG JSON file → run `/goal --dag <path>`
-  directly.
+- The user has already written a DAG JSON file → hand it to goal-runner with
+  `/goal --dag <path>` directly.
 - The user wants to inspect an existing goal → use `/goal status` /
   `/goal monitor`.
 
 ## Inputs
 
-- `<doc>` — path to a development document. Supported today: markdown, plain
-  text, or a JSON document that the agent can structure into a `GoalDagSpec`.
+- `<doc>` — path to a development document or OpenSpec change directory.
+  Supported today: markdown, plain text, `openspec/changes/<change-name>/`, or
+  a JSON document that the agent can structure into a `GoalDagSpec`.
 - (Optional) `<out>` — output path for the DAG file. Default: a sibling
   `.dag.json` next to the document (e.g. `prd.md` → `prd.dag.json`).
 - (Optional) `<trace>` — output path for the planning trace sidecar. Default:
   a sibling `.trace.json` next to the DAG file when producing a non-trivial DAG.
 
+## Stage 2 producer boundary
+
+`goal-dag` produces:
+
+```text
+OpenSpec / PRD / design doc / ticket
+→ GoalDagSpec
+→ validated <name>.dag.json
+→ optional <name>.trace.json
+```
+
+It must not:
+
+- Execute `/goal --dag`.
+- Manage subagents.
+- Create worktrees.
+- Execute validators.
+- Decide goal completion or blocked state.
+- Modify implementation files.
+- Create or modify OpenSpec source packages.
+- Preserve producer-only trace metadata in the runtime DAG JSON.
+
+## OpenSpec Change Input Contract
+
+When the input path is `openspec/changes/<change-name>/`:
+
+1. Read `source-manifest.json` first.
+2. Read every file listed in `sources[]`.
+3. Treat these source kinds as authoritative:
+   - `proposal`
+   - `design`
+   - `tasks`
+   - `spec-delta`
+4. Do not treat `change-explainer.html` as authoritative.
+5. Do not read `.goal-spec/` workflow artifacts as source of truth.
+6. If `source-manifest.json` is missing or stale, stop and ask for regeneration
+   or run the appropriate manifest validation command when available.
+7. Preserve OpenSpec assumptions and open questions into the planning trace.
+8. Open questions that affect scope/API/data/security/validation must become:
+   - a decision node, or
+   - a `human-confirmation` completion gate when supported by the active runtime
+     policy, or
+   - a DAG generation blocker.
+
+### OpenSpec → DAG planning mapping
+
+- `proposal.md`
+  - `Why` / `What Changes` / `Impact` → root objective and high-level node candidates.
+- `design.md`
+  - Decisions / Detailed Design / Module Boundaries / Migration → node boundaries,
+    dependencies, conflicts, and risk.
+- `tasks.md`
+  - Unchecked non-backlog tasks → candidate nodes.
+  - `[BACKLOG]` tasks → trace only; do not emit runtime DAG nodes unless the user
+    explicitly includes them.
+- `specs/**/spec.md`
+  - Requirements / Scenarios → `acceptanceCriteria`, `validators` when explicitly
+    given, or `outputs` when source-grounded.
+- Open Questions
+  - Implementation-sensitive questions become a runtime blocker, gate, or decision node.
+- Assumptions
+  - Escalate risk or require a supported human-confirmation gate when assumptions
+    are not retired.
+
+When source input is an already-approved OpenSpec change, DAG nodes should
+implement, verify, review, or archive that change. They must not say "Create an
+OpenSpec change" unless the source document explicitly asks for execution-time
+child specs. Use wording like:
+
+```text
+Implement the approved OpenSpec change <change-name> slice for fixtures
+```
+
 ## Workflow
 
-1. **Read the source document** with `read`. Do not invent content; the document
+1. **Read the source document** with `read`. For OpenSpec change directories,
+   follow the OpenSpec Change Input Contract above. Do not invent content; the document
    is the source of truth for the goal objective, requirements, constraints,
    and supported node boundaries.
 
@@ -160,16 +245,20 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
       --spec <spec.json> --out <out.dag.json> --trace <out.trace.json>
     ```
 
-    The CLI round-trips the spec through `agent-goal-runtime`'s
-    `parseGoalDagFileDocument()` and refuses to write an invalid DAG. Spec-only
-    fields (`openQuestions`, `consumes`, `produces`, `evidence`,
-    `modelRationale`, `acceptanceCriteria`, `decompositionRationale`) are
-    stripped from the runtime DAG and preserved in the trace sidecar.
+    The CLI round-trips the spec through the goal-runner parser currently
+    exported by `agent-goal-runtime` as `parseGoalDagFileDocument()` and refuses
+    to write an invalid DAG. Runtime fields such as `kind`, `validation`,
+    `workspace`, `risk`, `completionGates`, `modelScenario`, and `thinkingLevel`
+    are preserved in the emitted DAG. Spec-only fields (`openQuestions`,
+    `consumes`, `produces`, `evidence`, `modelRationale`,
+    `acceptanceCriteria`, `decompositionRationale`) are stripped from the
+    runtime DAG and preserved in the trace sidecar.
 
 13. **Show the user the resulting DAG and trace** (objective + node ids +
     dependency graph + node quality review + dependency review + model
     assignment table + cost-tier table + trace warnings / open questions)
-    and the diff vs. the document's intent, then ask whether to start:
+    and the diff vs. the document's intent. Then show the exact Stage 3 handoff
+    command, but do **not** execute it:
 
     ```text
     /goal --dag <out.dag.json>
@@ -196,8 +285,19 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
   explain what upstream state/artifact the dependent node consumes. Encode that
   state in `consumes` / `produces` and cite the source in `evidence`. If the edge
   is only based on list order or habit, remove it or ask the user.
-- **Always round-trip through the runtime parser** so cycle / missing-dep /
-  scenario-ref errors surface before the user sees the file.
+- **Always round-trip through the goal-runner parser** so cycle / missing-dep /
+  scenario-ref / `kind` / `validation` errors surface before the user sees the
+  file.
+- **Never execute Stage 3 behavior.** Do not run `/goal --dag`, execute
+  validators, create worktrees, manage subagents, decide completion/blocked, or
+  modify implementation files.
+- **Do not create or modify OpenSpec source packages.** When source input is an
+  already-approved OpenSpec change, DAG nodes should implement, verify, review,
+  or archive that change. They must not say "Create an OpenSpec change" unless
+  the source document explicitly asks for execution-time child specs.
+- **Never put trace-only metadata in runtime DAG JSON.** `openQuestions`,
+  `consumes`, `produces`, `evidence`, `modelRationale`, `acceptanceCriteria`,
+  and `decompositionRationale` belong only in the spec/trace sidecar.
 
 - **A shallow DAG is acceptable** when nodes are independently executable and
   individually verifiable. Do not increase depth just to make the DAG look
