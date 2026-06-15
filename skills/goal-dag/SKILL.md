@@ -43,7 +43,8 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 ## Workflow
 
 1. **Read the source document** with `read`. Do not invent content; the document
-   is the source of truth for the goal objective and node list.
+   is the source of truth for the goal objective, requirements, constraints,
+   and supported node boundaries.
 
 2. **Read the model catalog** before assigning models. Prefer a project-local
    `.goal/model-catalog.json` when present; otherwise use this package's
@@ -55,7 +56,8 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 
 3. **Extract candidate tasks from source evidence.** Do not invent content.
    Use the document as the sole source of truth. For each candidate task, note
-   what the document explicitly says about its scope, outputs, order, and risk.
+   what the document explicitly says or strongly implies about its scope,
+   outputs, order, and risk.
 
 4. **Build an evidence table.** Adapt the Plan-over-Graph pattern. For each
    candidate task extract: source quote/section, implied artifact/state, and
@@ -78,14 +80,19 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 
    When a node is too large, split it using **candidate decomposition
    patterns** (see [`references/planning-quality.md`](references/planning-quality.md#candidate-decomposition-patterns)).
-   These patterns suggest node boundaries, not dependency chains. Do not add
-   `after` edges based on patterns alone — dependencies still require
+   These patterns suggest node boundaries, not dependency chains. Patterns may
+   split an explicitly broad requirement into narrower execution boundaries
+   only when those boundaries are directly stated or strongly implied by the
+   source document. Do not create unsupported deliverables, validators, modules,
+   or `after` edges from patterns alone — dependencies still require
    `consumes` / `produces` / `evidence`.
 
    If a broad node cannot be safely split from source evidence:
    - Mark it high risk.
-   - Add `openQuestions` explaining the ambiguity.
-   - Add `human-confirmation` to `completionGates`.
+   - Add node-prefixed `openQuestions` explaining the ambiguity.
+   - Add `human-confirmation` to `completionGates` only when supported by the
+     active runtime policy; otherwise require manual user review before
+     offering `/goal --dag`.
    - Do not silently execute it.
 
 7. **Run a node quality review.** Before writing the final spec, show this
@@ -98,12 +105,12 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
    - `outputs`
    - `validators`
    - spec-only `acceptanceCriteria` (extracted from source evidence)
-   - `openQuestions` explaining why acceptance is unresolved
+   - node-prefixed root `openQuestions` explaining why acceptance is unresolved
 
    Do not invent shell validators or outputs. When the source document does
    not provide deterministic checks, use `acceptanceCriteria` or
-   `openQuestions`. A node without any acceptance handle must not be marked
-   low risk.
+   node-prefixed `openQuestions` (`<node-id>: question`). A node without any
+   acceptance handle must not be marked low risk.
 
 8. **Run dependency / critical-path review.** Show a dependency review table
    with each node's consumed state, produced state, `after` edges, and why it
@@ -155,9 +162,9 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
 
     The CLI round-trips the spec through `agent-goal-runtime`'s
     `parseGoalDagFileDocument()` and refuses to write an invalid DAG. Spec-only
-    fields (`consumes`, `produces`, `evidence`, `modelRationale`,
-    `acceptanceCriteria`, `decompositionRationale`) are stripped from the
-    runtime DAG and preserved in the trace sidecar.
+    fields (`openQuestions`, `consumes`, `produces`, `evidence`,
+    `modelRationale`, `acceptanceCriteria`, `decompositionRationale`) are
+    stripped from the runtime DAG and preserved in the trace sidecar.
 
 13. **Show the user the resulting DAG and trace** (objective + node ids +
     dependency graph + node quality review + dependency review + model
@@ -178,7 +185,9 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
   The runtime will run validators as plain shell commands; only include them
   when the document specifies the check. Use spec-only `acceptanceCriteria` or
   `openQuestions` when the source document does not provide deterministic
-  checks.
+  checks. When `openQuestions` are used as a node acceptance handle, prefix
+  each question with the node id (for example,
+  `implement-service: confirm expected service-layer acceptance criteria`).
 - **Do not use models outside the active model catalog.** Declare every chosen
   model in `modelRouting.scenarios`, then assign each node with `modelScenario`.
   Omit `modelScenario` only after warning the user that runtime fallback will
@@ -195,16 +204,21 @@ DAG file and round-trips it through `agent-goal-runtime`'s parser for validation
   more detailed. The failure condition is oversized or unverifiable nodes,
   not shallow depth itself.
 - **Candidate decomposition patterns suggest node boundaries, not
-  dependency edges.** Only add `after` when consumes / produces / evidence
-  supports the dependency.
+  dependency edges.** Patterns may split an explicitly broad requirement into
+  narrower execution boundaries only when directly stated or strongly implied
+  by the source. Do not create unsupported deliverables, validators, modules,
+  or `after` edges from patterns alone. Only add `after` when consumes /
+  produces / evidence supports the dependency.
 - **Every node should have an acceptance handle:** `outputs`, `validators`,
-  `acceptanceCriteria`, or `openQuestions` explaining unresolved acceptance.
-  Nodes without any acceptance handle must not be marked low risk.
+  `acceptanceCriteria`, or node-prefixed root `openQuestions` explaining
+  unresolved acceptance. Nodes without any acceptance handle must not be
+  marked low risk.
 - **If a node requires major internal planning by the subagent**, run one
   refinement pass before writing the final spec.
 - **If a broad node cannot be safely split from source evidence**, mark it
-  high risk, add `openQuestions`, require `human-confirmation` gate, and
-  explain why it could not be split.
+  high risk, add node-prefixed `openQuestions`, add `human-confirmation` only
+  when supported by the active runtime policy, and otherwise require manual
+  user review before offering `/goal --dag`. Explain why it could not be split.
 - **If most implementation nodes require the strongest model**, run a
   model-cost sanity review before finalizing model assignments. If strong
   models remain justified, record the reason in the trace.

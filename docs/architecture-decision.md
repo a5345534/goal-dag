@@ -66,8 +66,9 @@ review.
   `parseGoalDagFileDocument`. All structural / graph /
   referential-integrity rules live in one place.
 - Spec-only planning metadata (`consumes`, `produces`, `evidence`,
-  `modelRationale`, `openQuestions`) is stripped before runtime validation and
-  may be emitted separately by `buildGoalDagPlanningTrace()`.
+  `modelRationale`, `acceptanceCriteria`, `decompositionRationale`, and
+  root-level `openQuestions`) is stripped before runtime validation and may be
+  emitted separately by `buildGoalDagPlanningTrace()`.
 - The cycle detection added in `agent-goal-runtime@0.1.1` is the
   same check `goal-dag` surfaces to the user before the file is
   written.

@@ -615,11 +615,15 @@ function buildNodeQualityRow(
   const warnings: string[] = [];
   const acceptanceCriteria = [...(node?.acceptanceCriteria ?? [])];
 
+  const hasNodeOpenQuestion = (spec.openQuestions ?? []).some((question) =>
+    question.trim().startsWith(`${nodeId}:`),
+  );
+
   const hasAcceptanceHandle =
     (node?.outputs && node.outputs.length > 0) ||
     (node?.validators && node.validators.length > 0) ||
     acceptanceCriteria.length > 0 ||
-    (spec.openQuestions && spec.openQuestions.length > 0 && acceptanceCriteria.length === 0);
+    hasNodeOpenQuestion;
 
   if (!hasAcceptanceHandle) {
     const warning =

@@ -77,6 +77,35 @@ Rules:
 10. For critical or final-authority decisions, prefer the strongest catalog scenario.
 11. For local/private work, only choose local models when risk is acceptable or user requests it.
 
+## Model-cost sanity review
+
+Run this review after model assignment and before writing the final `GoalDagSpec` when most leaf implementation nodes require the strongest catalog model. This is a review trigger, not a hard failure.
+
+Check whether:
+
+- Scan, design, or review work is mixed into implementation nodes.
+- High-risk decisions can be split from low-risk implementation into separate review/audit nodes.
+- Docs or tests can be split into cheaper leaf nodes.
+- The whole DAG is genuinely high risk.
+- A node is assigned the strongest model only because its scope is too broad.
+
+Show a cost-tier table:
+
+| model tier | nodes | reason | action |
+| --- | --- | --- | --- |
+| strongest | final-audit, schema-migration-plan | high-risk review / migration decision | keep |
+| normal implementation | implement-service | bounded service work | keep |
+| cheap docs/test | update-docs, add-unit-tests | low-risk leaf work | keep |
+
+Allowed actions:
+
+- `keep` when the stronger model is justified by node-local risk.
+- `split` when a broad node is mixing work types and causing an unnecessarily expensive model choice.
+- `downgrade` when a cheaper catalog model fits the node after review.
+- `ask-user` when risk/cost tradeoffs are unclear.
+
+If strong models remain justified, record the reason in `modelRationale` and in the final summary. Do not use a fixed percentage threshold as a hard gate.
+
 ## Example final runtime `modelRouting` block
 
 After using the catalog to assign scenarios, write runtime-compatible routing in

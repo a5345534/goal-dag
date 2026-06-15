@@ -30,7 +30,7 @@ lives at:
 | `workspaceStrategy` | no | string | Workspace allocation strategy. Defaults to native Git worktree in Pi. |
 | `workspace` | no | object | Deterministic node worktree binding: `worktreeSlug`, optional `branch`, optional `baseRef`. For native-git nodes, `goal-dag` emits `worktreeSlug: <node id>` when omitted. |
 | `risk` | no | `low` / `medium` / `high` | Risk label for scheduling / model-routing / review policy. |
-| `completionGates` | no | string array | Completion gates. Defaults to `controller-validation`. |
+| `completionGates` | no | string array | Completion gates. Defaults to `controller-validation`. Only use policy-specific gates that the active runtime/controller actually enforces; otherwise require manual user review outside the DAG. |
 | `modelScenario` | no | scenario id | Explicit model-routing scenario for this node. |
 
 ## Validation rules `goal-dag` must respect
@@ -59,11 +59,13 @@ planning trace sidecar and are stripped before runtime DAG validation:
 
 | Field | Location | Type | Meaning |
 | --- | --- | --- | --- |
-| `openQuestions` | root | string array | Unresolved questions preserved in the trace sidecar. |
+| `openQuestions` | root | string array | Unresolved questions preserved in the trace sidecar. When used as a node acceptance handle, prefix the question with `<node-id>:`. |
 | `consumes` | node | string array | States/artifacts the node requires before it can run. |
 | `produces` | node | string array | States/artifacts the node creates for downstream nodes. |
 | `evidence` | node | string or object array | Source quotes/references supporting the node or edge rationale. |
 | `modelRationale` | node | string | Human-readable reason for the chosen `modelScenario`. |
+| `acceptanceCriteria` | node | string array | Review-only criteria for accepting this node when deterministic validators or outputs are unavailable. |
+| `decompositionRationale` | node | string | Explanation for why this node is sufficiently decomposed. |
 
 Use `--trace <path>` to write the sidecar:
 
@@ -72,6 +74,23 @@ goal-dag build-dag --spec spec.json --out goal.dag.json --trace goal.trace.json
 ```
 
 The runtime DAG JSON will not contain these fields.
+
+The planning trace sidecar includes a `nodeQuality` array with per-node review metadata:
+
+```ts
+interface GoalDagPlanningTraceNodeQuality {
+  nodeId: string;
+  acceptanceCriteria: string[];
+  decompositionRationale?: string;
+  warnings?: string[];
+}
+```
+
+If a node has no `outputs`, `validators`, `acceptanceCriteria`, or node-prefixed `openQuestions`, the trace records this warning:
+
+```text
+No acceptance handle declared; confirm expected outputs, validators, or review criteria before execution.
+```
 
 ## GoalDagSpec example with trace metadata
 
@@ -86,7 +105,12 @@ The runtime DAG JSON will not contain these fields.
       "workspace": { "worktreeSlug": "attendance-parity" },
       "outputs": ["tests/test_attendance_parity.py"]
     },
-    { "id": "payroll-doctypes", "objective": "Add payroll DocTypes" },
+    {
+      "id": "payroll-doctypes",
+      "objective": "Add payroll DocTypes",
+      "acceptanceCriteria": ["Payroll DocType changes are reviewable against the source requirement"],
+      "decompositionRationale": "Single bounded DocType artifact slice"
+    },
     {
       "id": "integration-validation",
       "objective": "Run integrated validation",

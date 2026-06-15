@@ -397,6 +397,20 @@ test("buildGoalDagPlanningTrace warns on missing acceptance handle", () => {
     assert.ok(acceptanceWarning, "expected acceptance handle warning");
     assert.equal(trace.nodeQuality[0]?.warnings?.length, 1);
 });
+test("buildGoalDagPlanningTrace treats only node-prefixed openQuestions as acceptance handles", () => {
+    const unprefixedTrace = buildGoalDagPlanningTrace({
+        objective: "x",
+        openQuestions: ["Confirm expected acceptance criteria"],
+        nodes: [{ id: "a", objective: "a" }],
+    });
+    assert.ok(unprefixedTrace.nodeQuality[0]?.warnings?.some((warning) => warning.includes("No acceptance handle")), "unprefixed root openQuestions should not satisfy node acceptance");
+    const prefixedTrace = buildGoalDagPlanningTrace({
+        objective: "x",
+        openQuestions: ["a: Confirm expected acceptance criteria"],
+        nodes: [{ id: "a", objective: "a" }],
+    });
+    assert.equal(prefixedTrace.nodeQuality[0]?.warnings, undefined);
+});
 test("buildGoalDagFromSpec strips acceptance criteria from runtime DAG output", () => {
     const document = buildGoalDagFromSpec({
         objective: "x",

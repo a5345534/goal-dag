@@ -25,9 +25,11 @@ This package only does two things:
    integrity. The builder refuses to write an invalid DAG.
 
 For reviewability, `GoalDagSpec` may also carry spec-only planning metadata
-(`consumes`, `produces`, `evidence`, `modelRationale`, `openQuestions`). The
-builder strips those fields from the runtime DAG and can write a separate
-planning trace sidecar JSON.
+(`consumes`, `produces`, `evidence`, `modelRationale`, `acceptanceCriteria`,
+`decompositionRationale`, and root-level `openQuestions`). The builder strips
+those fields from the runtime DAG and can write a separate planning trace
+sidecar JSON. When `openQuestions` are used as a node acceptance handle, prefix
+the question with `<node-id>:` so the trace can be reviewed against that node.
 
 ## Install
 
@@ -103,7 +105,12 @@ const spec: GoalDagSpec = {
       workspace: { worktreeSlug: "attendance-parity" },
       outputs: ["tests/test_attendance_parity.py"],
     },
-    { id: "payroll-doctypes",  objective: "Add payroll DocTypes" },
+    {
+      id: "payroll-doctypes",
+      objective: "Add payroll DocTypes",
+      acceptanceCriteria: ["Payroll DocType changes are reviewable against the source requirement"],
+      decompositionRationale: "Single bounded DocType artifact slice",
+    },
     {
       id: "integration-validation",
       objective: "Run integrated validation",
@@ -129,7 +136,8 @@ omitted. Expected `outputs` are emitted relative to that node workspace root; do
 not put `.worktrees/<slug>/...` in artifact paths.
 
 Spec-only planning fields are accepted for trace generation but are never emitted
-in the runtime DAG JSON. Use them to explain dependencies and model choices.
+in the runtime DAG JSON. Use them to explain dependencies, acceptance criteria,
+decomposition rationale, unresolved node-level questions, and model choices.
 
 ## Pi skill
 
@@ -146,17 +154,19 @@ The skill walks the agent through:
 2. Reading the active model catalog (`.goal/model-catalog.json` when present,
    otherwise `catalogs/pi-available-models.json`).
 3. Running a planning-quality pass: evidence table → abstract transition graph
-   → dependency/critical-path review, with a skeptical judge pass for high-risk
+   → recursive decomposition review → node quality review →
+   dependency/critical-path review, with a skeptical judge pass for high-risk
    or ambiguous plans.
 4. Asking clarifying questions about dependencies, conflicts, validators,
-   redundant shortcut nodes, and model assignment.
-5. Producing a model assignment table and writing `modelRouting.scenarios`, a
-   dedicated `controllerScenario`, and per-node `modelScenario` into the
-   `GoalDagSpec`.
-6. Writing the `GoalDagSpec` JSON with spec-only planning metadata for traceability.
-7. Running the CLI to build a parser-valid DAG file and trace sidecar.
-8. Showing the user the resulting DAG, planning trace, and offering
-   `/goal --dag <out.dag.json>`.
+   unresolved acceptance handles, redundant shortcut nodes, and model assignment.
+5. Producing a model assignment table and, when most implementation leaves need
+   the strongest model, a model-cost sanity review table.
+6. Writing `modelRouting.scenarios`, a dedicated `controllerScenario`, and
+   per-node `modelScenario` / `modelRationale` into the `GoalDagSpec`.
+7. Writing the `GoalDagSpec` JSON with spec-only planning metadata for traceability.
+8. Running the CLI to build a parser-valid DAG file and trace sidecar.
+9. Showing the user the resulting DAG, `nodeQuality` trace warnings/open questions,
+   and offering `/goal --dag <out.dag.json>`.
 
 ## Model catalog
 
@@ -170,6 +180,8 @@ prefers that file when it exists. The catalog's role is to inform LLM judgment;
 the LLM still chooses the final controller and per-node `modelScenario`
 assignments, declares runtime-compatible `modelRouting.scenarios`, sets a
 `controllerScenario`, and shows a model assignment table before writing the DAG.
+If most implementation leaves require the strongest model, the skill runs a
+model-cost sanity review before finalizing the assignments.
 
 Schema: [`schemas/model-catalog.schema.json`](schemas/model-catalog.schema.json).
 
