@@ -43,6 +43,10 @@ lives at:
 - The graph is acyclic.
 - `modelScenario` references an entry in `modelRouting.scenarios` (when
   `modelRouting` is declared) — or `modelRouting` must declare the scenario.
+- **Model ID canonical format**: all `model` fields in `modelRouting.scenarios`
+  MUST use `provider/model` (slash-separated, for example `openai-codex/gpt-5.5`).
+  The `provider.model` (dot-separated) form IS REJECTED. Other agent adapters
+  map from this canonical format to their native form.
 - `outputs` are workspace-root-relative artifact paths. Put deterministic worktree/branch binding in `workspace`; do not put `.worktrees/<slug>/...` in outputs.
 
 `goal-dag build-dag` rejects any spec that violates these rules.

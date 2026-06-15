@@ -212,6 +212,7 @@ export function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocument {
     ...(spec.modelRouting ? { modelRouting: cloneModelRouting(spec.modelRouting) } : {}),
     nodes: spec.nodes.map((node) => cloneNode(node, defaultRisk, defaultWorkspaceStrategy)),
   };
+  assertCanonicalModelIds(draft);
   return parseGoalDagFileDocument(draft);
 }
 
@@ -398,6 +399,28 @@ function cloneModelRouting(config: GoalModelRoutingConfig): GoalModelRoutingConf
   if (config.defaultSubagentScenario) out.defaultSubagentScenario = config.defaultSubagentScenario;
   if (config.rules) out.rules = config.rules.map((rule) => ({ ...rule }));
   return out;
+}
+
+const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
+
+function assertCanonicalModelIds(draft: GoalDagFileDocument): void {
+  const invalid: { path: string; value: string }[] = [];
+  for (const [scenarioId, scenario] of Object.entries(draft.modelRouting?.scenarios ?? {})) {
+    if (scenario.model.match(CANONICAL_MODEL_ID_PATTERN)) continue;
+    invalid.push({
+      path: `modelRouting.scenarios.${scenarioId}.model`,
+      value: scenario.model,
+    });
+  }
+  if (invalid.length === 0) return;
+  const messages = invalid.map(
+    ({ path, value }) =>
+      `  ${path}: ${JSON.stringify(value)} — expected canonical provider/model format (e.g. openai-codex/gpt-5.5), NOT provider.model`,
+  );
+  throw new Error(
+    `Invalid goal DAG spec: model IDs must use canonical provider/model format:\n` +
+      messages.join("\n"),
+  );
 }
 
 function collectEvidence(

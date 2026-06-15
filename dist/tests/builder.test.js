@@ -386,6 +386,37 @@ test("buildGoalDagFromSpecFile writes a planning trace when requested", () => {
         rmSync(dir, { recursive: true, force: true });
     }
 });
+test("buildGoalDagFromSpec rejects dot-separated model IDs", () => {
+    assert.throws(() => buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                impl: { model: "openai-codex.gpt-5.5" },
+            },
+            defaultSubagentScenario: "impl",
+        },
+        nodes: [{ id: "a", objective: "a", modelScenario: "impl" }],
+    }), /canonical provider\/model format/);
+});
+test("buildGoalDagFromSpec accepts slash-separated model IDs", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                controller: { model: "openai-codex/gpt-5.5" },
+                spark: { model: "openai-codex/gpt-5.3-codex-spark" },
+            },
+            controllerScenario: "controller",
+            defaultSubagentScenario: "spark",
+        },
+        nodes: [
+            { id: "a", objective: "a", modelScenario: "spark" },
+            { id: "b", objective: "b", modelScenario: "spark" },
+        ],
+    });
+    assert.equal(document.modelRouting?.scenarios?.controller?.model, "openai-codex/gpt-5.5");
+    assert.equal(document.modelRouting?.scenarios?.spark?.model, "openai-codex/gpt-5.3-codex-spark");
+});
 test("build-dag CLI accepts the build-dag subcommand", () => {
     // Spawn the compiled CLI the way a shell or Pi would invoke it, and
     // confirm the subcommand is consumed before flag parsing runs.
