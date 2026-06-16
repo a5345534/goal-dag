@@ -65,7 +65,7 @@ pi update
 ```
 
 The runtime dependency is pinned via `goal-dag`'s own `package.json` to
-`github:a5345534/goal-contract#3ce4d8f`, so a
+`github:a5345534/goal-contract#dc48e42f98e8c585fad8f5f2c94ab42c9cdcca86`, so a
 single install or update brings in the Stage 2 producer plus the Stage 3
 parser/runtime API it validates against. This pin includes the closed
 `requiredEvidence` runtime contract from issue #39.
@@ -318,7 +318,7 @@ to catch stale artifacts at release time.
 The package depends on `goal-contract` via a git ref:
 
 ```json
-"goal-contract": "github:a5345534/goal-contract#3ce4d8f"
+"goal-contract": "github:a5345534/goal-contract#dc48e42f98e8c585fad8f5f2c94ab42c9cdcca86"
 ```
 
 Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
