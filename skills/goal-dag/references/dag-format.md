@@ -66,6 +66,28 @@ Producer-side schema reference:
 `goal-dag build-dag` rejects any spec that violates these rules.
 The error message tells you which field; fix the spec and retry.
 
+## Validation evidence tokens and field mapping
+
+`goal-runner` uses `validation.requiredEvidence` to gate runtime completion.
+`goal-dag` only passes this field through from the planning spec; it does not
+interpret it.
+
+### Supported `requiredEvidence` tokens
+
+| Token | Meaning |
+| --- | --- |
+| `validators-ran` | All node `validators` (or a configured runtime subset) must run successfully. |
+| `audit-report-present` | The runtime verifies required audit artifacts under `validation.auditReportPaths` are present. |
+
+### Common source → field mappings
+
+| Source intent | Planner fields | Required evidence / runtime interpretation |
+| --- | --- | --- |
+| Deterministic shell check in source text | `validators` | Pair with `validation.requiredEvidence: ["validators-ran"]` to require runtime execution status. |
+| Audit artifact requirement in source text | `validation.auditReportPaths` | Pair with `validation.requiredEvidence: ["audit-report-present"]` to require path existence checks. |
+| Source scope restrictions | `validation.allowedPaths`, `validation.forbiddenPaths` | No `requiredEvidence` token; the runtime enforces scope directly in validation phase. |
+| Textual/prose acceptance requirement | `acceptanceCriteria` (node), `evidence` (node), optionally root `openQuestions` | Runtime reads spec artifacts; manual trace-based review happens in the planning trace. |
+
 ## Spec-only planning metadata
 
 `GoalDagSpec` may include these producer-side fields. They are used to build the
@@ -119,12 +141,22 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
       "id": "attendance-parity",
       "objective": "Add attendance parity fixtures",
       "workspace": { "worktreeSlug": "attendance-parity" },
-      "outputs": ["tests/test_attendance_parity.py"]
+      "outputs": ["tests/test_attendance_parity.py"],
+      "validators": ["pytest tests/test_attendance_parity.py"],
+      "validation": {
+        "requiredEvidence": ["validators-ran"]
+      }
     },
     {
       "id": "payroll-doctypes",
       "objective": "Add payroll DocTypes",
       "acceptanceCriteria": ["Payroll DocType changes are reviewable against the source requirement"],
+      "evidence": [
+        {
+          "source": "prd.md#scope",
+          "quote": "Payroll DocTypes should cover wage-grade and grading policy changes."
+        }
+      ],
       "decompositionRationale": "Single bounded DocType artifact slice"
     },
     {
@@ -135,6 +167,8 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
         "profile": "code-change",
         "testSpecNodeId": "attendance-parity",
         "diffBaseRef": "main",
+        "auditReportPaths": ["artifacts/people-frappe-audit.md"],
+        "requiredEvidence": ["audit-report-present"],
         "allowedPaths": ["tests/**", "people_frappe/**"],
         "forbiddenPaths": ["package-lock.json", "infra/**"]
       },
@@ -145,6 +179,10 @@ No acceptance handle declared; confirm expected outputs, validators, or review c
         {
           "source": "prd.md#validation",
           "quote": "Run integrated validation after both backend slices land."
+        },
+        {
+          "source": "prd.md#audit",
+          "quote": "Upload a short validation audit report in artifacts/."
         }
       ]
     }

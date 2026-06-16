@@ -172,6 +172,28 @@ Runtime fields such as `kind`, `validation`, `thinkingLevel`, `workspace`,
 `completionGates`, and `modelScenario` are preserved in the emitted DAG and
 validated by the runner parser.
 
+## Producer/runtime field guidance
+
+`goal-dag` inputs (`GoalDagSpec`) and outputs (`.dag.json`) share runtime field
+names but differ in ownership:
+
+- Runtime-owned fields are included in the output DAG (for controller use):
+  `id`, `objective`, `after`, `outputs`, `validators`, `conflicts`, `scope`,
+  `kind`, `validation`, `workspaceStrategy`, `workspace`, `risk`,
+  `completionGates`, `modelScenario`, and `thinkingLevel`.
+- Producer-only fields are stripped from `.dag.json` and only appear in the
+  planning trace sidecar: `openQuestions`, `consumes`, `produces`, `evidence`,
+  `modelRationale`, `acceptanceCriteria`, and `decompositionRationale`.
+
+For deterministic checks, map source shell commands to `validators` and also
+enforce `validation.requiredEvidence: ["validators-ran"]` so the runtime can
+confirm execution. For audit-artifact requirements, map to
+`validation.auditReportPaths` plus `validation.requiredEvidence: ["audit-report-present"]`.
+For scope constraints, map to `validation.allowedPaths` /
+`validation.forbiddenPaths`.
+For prose-only acceptance, use `acceptanceCriteria` plus `evidence` and rely on
+`<name>.trace.json` for review context.
+
 ## Producer boundary
 
 `goal-dag` is intentionally Stage 2 only. It must not:

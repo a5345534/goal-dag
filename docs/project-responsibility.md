@@ -95,7 +95,7 @@ The runtime DAG JSON may contain fields supported by the runtime contract, inclu
 - defaults such as `validators`, `workspaceStrategy`, `completionGates`, `conflicts`, `modelScenario`, and `thinkingLevel`;
 - validation contract fields such as `profile`, `testSpecNodeId`, `approvedByNodeId`, `artifactLocks`, `requiredEvidence`, `diffBaseRef`, `auditReportPaths`, `allowedPaths`, and `forbiddenPaths`.
 
-This repository must round-trip emitted DAG JSON through the runtime DAG parser contract before presenting it as ready for runtime execution.
+This repository must round-trip emitted DAG JSON through the runtime DAG parser contract before presenting it as ready for runtime execution. It validates the producer output is structurally acceptable to the runtime but does not enforce controller checks; evidence and validator satisfaction are runtime concerns handled by `goal-runner`.
 
 ## Producer-only metadata
 
@@ -121,7 +121,7 @@ runtime DAG JSON file: <name>.dag.json
 
 This repository may show a runtime execution command to the user, but it must not execute it.
 
-This repository may also produce `<name>.trace.json`, but runtime execution must not consume the trace sidecar as runtime input.
+This repository may also produce `<name>.trace.json`, but runtime execution must not consume the trace sidecar as runtime input. `goal-runner` owns runtime evidence satisfaction (`validators`, `requiredEvidence`, audit/path checks, etc.).
 
 ## Drift prevention rules
 
@@ -132,7 +132,7 @@ A change to this repository is suspicious and requires boundary review if it:
 - creates worktrees or subagent sessions;
 - executes validators;
 - implements runtime scheduler behavior;
-- implements controller validation enforcement;
+- implements controller validation enforcement (including evidence/validator checks);
 - writes lifecycle ledger data;
 - emits producer-only metadata into `.dag.json`;
 - depends on non-authoritative explainer content as source of truth;
@@ -146,9 +146,10 @@ Before merging a change to this repository, verify:
 - governed specification input still goes through `source-manifest.json` and authoritative sources;
 - no specification-authoring responsibility was introduced;
 - no runtime execution command invocation was introduced;
-- the runtime DAG is validated by the runtime parser contract;
+- the runtime DAG is validated by the runtime parser contract by `goal-dag`; evidence/runtime validation is delegated to `goal-runner`;
 - producer-only metadata is stripped from `.dag.json`;
 - runtime fields supported by the runtime DAG contract are preserved when supplied;
+- evidence-related runtime behavior (`requiredEvidence`, validator execution, audit/path-policy checks) is not implemented in this stage.
 - `.trace.json` remains optional and non-runtime;
 - docs and schema match the actual planning-spec builder behavior;
 - the repository does not need to know the concrete repository names of adjacent stages.
