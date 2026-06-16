@@ -65,10 +65,10 @@ pi update
 ```
 
 The runtime dependency is pinned via `goal-dag`'s own `package.json` to
-`github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07`, so a
+`github:a5345534/goal-runner#f7ba1b341dc0232d5625b8bf895b55930e383b86`, so a
 single install or update brings in the Stage 2 producer plus the Stage 3
-parser/runtime API it validates against. This pin includes `validation.allowedPaths`,
-`validation.forbiddenPaths`, and `defaults.thinkingLevel` support.
+parser/runtime API it validates against. This pin includes the closed
+`requiredEvidence` runtime contract from issue #39.
 
 For a local-development checkout:
 
@@ -296,28 +296,34 @@ npm run check   # build + tests
 
 ### Build artifact policy
 
-`dist/` is **gitignored** and regenerated locally:
+`dist/` is **committed to the repo**, not gitignored. The reason:
+`pi install` runs `npm install --omit=dev`, which means `tsc` is not on PATH
+during install — any hook that tries to build will fail. Shipping a pre-built
+`dist/` makes the package install-anywhere.
+
+**When you change `src/`, you must also rebuild `dist/` and commit
+the regenerated build output**:
 
 ```bash
 npm run check   # builds + runs tests
-# src/ changes only; dist/ is not committed
+git add src/ dist/
+git commit
 ```
 
-The `prepack` script rebuilds `dist/` before `npm pack` / `npm publish`,
-so published tarballs always include the latest compiled output.
+The `prepack` script still rebuilds on `npm pack` / `npm publish`
+to catch stale artifacts at release time.
 
 ### Runtime dependency
 
 The package depends on `goal-runner` via a git ref:
 
 ```json
-"goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
+"goal-runner": "github:a5345534/goal-runner#f7ba1b341dc0232d5625b8bf895b55930e383b86"
 ```
 
 Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
-is the version-sync proof for the Stage 3 parser/schema surface: it includes
-`validation.allowedPaths`, `validation.forbiddenPaths`, and
-`defaults.thinkingLevel`. The runtime API surface `goal-dag` depends on:
+is the version-sync proof for the Stage 3 parser/schema surface; it includes the
+closed `requiredEvidence` runtime contract from issue #39.
 
 - `parseGoalDagFileDocument` (parser + validator)
 - `GoalDagFileDocument`, `GoalDagFileNode`, `GoalDagFileDefaults`,

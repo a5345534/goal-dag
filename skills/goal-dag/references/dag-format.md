@@ -69,14 +69,20 @@ The error message tells you which field; fix the spec and retry.
 ## Validation evidence tokens and field mapping
 
 `goal-runner` uses `validation.requiredEvidence` to gate runtime completion.
-`goal-dag` only passes this field through from the planning spec; it does not
-interpret it.
+`goal-dag` does not satisfy or enforce `requiredEvidence` at runtime.
+It only preflights `requiredEvidence` tokens against the runner-supported closed
+set before handoff, and rejects unsupported natural-language values with a
+producer-friendly rewrite suggestion.
 
 ### Supported `requiredEvidence` tokens
 
 | Token | Meaning |
 | --- | --- |
 | `validators-ran` | All node `validators` (or a configured runtime subset) must run successfully. |
+| `locked-artifacts-unchanged` | Approved test/audit artifacts were not weakened by implementation work. |
+| `implementation-diff-present` | The implementation subagent produced a non-empty diff. |
+| `non-test-diff-present` | Non-test source files changed (used for features with coverage through integration/audit). |
+| `post-merge-validation-ran` | Validators were re-run in the controller workspace after subagent branch merge. |
 | `audit-report-present` | The runtime verifies required audit artifacts under `validation.auditReportPaths` are present. |
 
 ### Common source → field mappings

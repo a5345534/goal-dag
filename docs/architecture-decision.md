@@ -125,9 +125,17 @@ Project-specific catalogs can override the package default through
 
 ### The build artifact is committed
 
-`dist/` is **gitignored** and regenerated via `npm run build` or `npm run check`.
-The `prepack` script rebuilds before `npm pack` / `npm publish` so published
-tarballs always ship the latest compiled output.
+`dist/` is **committed to the repo**, not gitignored. The reason is concrete:
+`pi install` runs `npm install --omit=dev`, so `tsc` is not on PATH during
+install. Any `prepare` hook that tries to build will fail with
+`sh: 1: tsc: not found` and the package will install without a working CLI.
+Shipping a pre-built `dist/` makes the package install-anywhere with no
+install-time build.
+
+The dev workflow compensates: any change to `src/` must be rebuilt and the new
+`dist/` must be committed alongside the source change. The `prepack` hook still
+rebuilds on `npm pack` / `npm publish` to catch stale build output at release
+time.
 
 ## Data flow
 

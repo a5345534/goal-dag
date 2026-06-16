@@ -97,6 +97,8 @@ The runtime DAG JSON may contain fields supported by the runtime contract, inclu
 
 This repository must round-trip emitted DAG JSON through the runtime DAG parser contract before presenting it as ready for runtime execution. It validates the producer output is structurally acceptable to the runtime but does not enforce controller checks; evidence and validator satisfaction are runtime concerns handled by `goal-runner`.
 
+Producer-side validation may reject runtime contract values that are known to be unsupported by the pinned runner parser/policy, such as unsupported `requiredEvidence` tokens. This is handoff preflight, not runtime evidence satisfaction or controller validation enforcement.
+
 ## Producer-only metadata
 
 The following fields are producer-only and must never appear in runtime DAG JSON:
