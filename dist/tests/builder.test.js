@@ -771,4 +771,381 @@ test("goal-dag skill documents OpenSpec change directory input contract", () => 
     assert.match(skill, /Do not read `\.goal-spec\/` workflow artifacts as source of truth/);
     assert.match(skill, /must not say "Create an\s+OpenSpec change"/);
 });
+test("valid requiredEvidence token build round-trip through serialize and re-validate", () => {
+    const tokens = [
+        "validators-ran",
+        "locked-artifacts-unchanged",
+        "implementation-diff-present",
+        "non-test-diff-present",
+        "post-merge-validation-ran",
+        "audit-report-present",
+    ];
+    const spec = {
+        objective: "Token round-trip",
+        nodes: [
+            {
+                id: "token-impl",
+                objective: "Implement with all evidence tokens",
+                validation: { requiredEvidence: tokens },
+            },
+        ],
+    };
+    // Build validates and carves out the node
+    const document = buildGoalDagFromSpec(spec);
+    assert.deepEqual(document.nodes[0]?.validation?.requiredEvidence, tokens, "all supported tokens must survive the builder");
+    // Serialize → re-validate round-trip
+    const json = serializeGoalDagDocument(document);
+    const reparsed = validateGoalDagJson(json);
+    assert.deepEqual(reparsed.nodes[0]?.validation?.requiredEvidence, tokens, "round-trip through JSON must preserve every token");
+    // Confirm none of the tokens are in the unsupported set
+    for (const token of tokens) {
+        assert.match(json, new RegExp(token.replace(/[-]/g, "\\-")), `token ${token} must appear in serialized DAG`);
+    }
+});
+test("invalid prose evidence fails during buildGoalDagFromSpecFile before any DAG file is written", () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-dag-"));
+    try {
+        const specPath = join(dir, "spec.json");
+        const outPath = join(dir, "out.dag.json");
+        writeFileSync(specPath, JSON.stringify({
+            objective: "x",
+            nodes: [
+                {
+                    id: "impl",
+                    objective: "Implement",
+                    validation: {
+                        requiredEvidence: [
+                            "Code review by senior engineer completed on 2025-06-01 with sign-off in PRD section 4.2",
+                        ],
+                    },
+                },
+            ],
+        }), "utf8");
+        assert.throws(() => buildGoalDagFromSpecFile(specPath, outPath), /unsupported value/, "must reject prose evidence before writing DAG");
+        // Verify no DAG file was created on disk
+        let fileWritten = true;
+        try {
+            readFileSync(outPath);
+        }
+        catch {
+            fileWritten = false;
+        }
+        assert.equal(fileWritten, false, "DAG file must not be written when evidence validation fails");
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+test("producer schema requiredEvidence enum is consistent with builder supported tokens", () => {
+    const schema = JSON.parse(readFileSync(resolve(REPO_ROOT, "schemas", "goal-dag-spec.schema.json"), "utf8"));
+    const enumValues = schema.$defs?.requiredEvidence?.items?.enum;
+    assert.ok(Array.isArray(enumValues), "schema must define requiredEvidence enum");
+    const expected = [
+        "validators-ran",
+        "locked-artifacts-unchanged",
+        "implementation-diff-present",
+        "non-test-diff-present",
+        "post-merge-validation-ran",
+        "audit-report-present",
+    ];
+    assert.deepEqual([...enumValues].sort(), [...expected].sort(), "producer schema enum must match the builder's supported evidence tokens");
+    // Every supported token must be usable in a real build
+    for (const token of expected) {
+        const document = buildGoalDagFromSpec({
+            objective: "x",
+            nodes: [
+                {
+                    id: "impl",
+                    objective: "Implement",
+                    validation: { requiredEvidence: [token] },
+                },
+            ],
+        });
+        assert.deepEqual(document.nodes[0]?.validation?.requiredEvidence, [token], `token ${token} must be accepted by the builder`);
+    }
+    // Every schema enum value must also be accepted by the builder
+    for (const token of enumValues) {
+        const document = buildGoalDagFromSpec({
+            objective: "x",
+            nodes: [
+                {
+                    id: "impl",
+                    objective: "Implement",
+                    validation: { requiredEvidence: [token] },
+                },
+            ],
+        });
+        assert.deepEqual(document.nodes[0]?.validation?.requiredEvidence, [token], `schema enum token ${token} must be accepted by the builder`);
+    }
+});
+test("buildGoalDagPlanningTrace preserves acceptanceCriteria and evidence exactly", () => {
+    const spec = {
+        objective: "Preservation test",
+        nodes: [
+            {
+                id: "alpha",
+                objective: "Alpha objective",
+                acceptanceCriteria: [
+                    "Must compile without errors",
+                    "Must pass type-check",
+                ],
+                evidence: [
+                    {
+                        id: "ev-proof",
+                        source: "design.md#L10",
+                        quote: "Alpha is required for the pipeline",
+                        supports: ["node:alpha"],
+                    },
+                ],
+                decompositionRationale: "Single bounded implementation",
+            },
+            {
+                id: "beta",
+                objective: "Beta objective",
+                after: ["alpha"],
+                acceptanceCriteria: ["Must integrate with alpha"],
+                evidence: ["Beta follows alpha per the architecture decision record"],
+                produces: ["beta-artifact"],
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    // acceptanceCriteria exactly preserved per node
+    assert.deepEqual(trace.nodeQuality.find((n) => n.nodeId === "alpha")?.acceptanceCriteria, ["Must compile without errors", "Must pass type-check"]);
+    assert.deepEqual(trace.nodeQuality.find((n) => n.nodeId === "beta")?.acceptanceCriteria, ["Must integrate with alpha"]);
+    // decompositionRationale preserved
+    assert.equal(trace.nodeQuality.find((n) => n.nodeId === "alpha")?.decompositionRationale, "Single bounded implementation");
+    // Structured evidence preserved
+    assert.equal(trace.evidence.length, 2, "should collect 2 evidence items");
+    const evProof = trace.evidence.find((e) => e.id === "ev-proof");
+    assert.ok(evProof, "ev-proof should be preserved in trace");
+    assert.equal(evProof?.source, "design.md#L10");
+    assert.equal(evProof?.quote, "Alpha is required for the pipeline");
+    assert.deepEqual(evProof?.supports, ["node:alpha"]);
+    assert.equal(evProof?.nodeId, "alpha");
+    // String evidence auto-assigned an id and preserved
+    const autoEv = trace.evidence.find((e) => e.quote === "Beta follows alpha per the architecture decision record");
+    assert.ok(autoEv, "string evidence should be auto-assigned and preserved");
+    assert.equal(autoEv?.nodeId, "beta");
+    assert.match(autoEv?.id ?? "", /^ev\d+$/);
+    // Evidence mapped into transitions
+    assert.ok((trace.transitions.find((t) => t.nodeId === "alpha")?.evidence ?? []).includes("ev-proof"));
+    assert.ok((trace.transitions.find((t) => t.nodeId === "beta")?.evidence ?? []).includes(autoEv?.id ?? ""));
+    // Trace is serializable
+    assert.doesNotThrow(() => JSON.parse(serializeGoalDagPlanningTrace(trace)));
+});
+test("runtime DAG output individually strips each trace-only field while trace preserves them", () => {
+    const spec = {
+        objective: "Individual strip verification",
+        openQuestions: ["Q1: Confirm acceptance criteria"],
+        modelRouting: {
+            scenarios: {
+                impl: { model: "openai-codex/gpt-5.3-codex-spark" },
+            },
+            defaultSubagentScenario: "impl",
+        },
+        nodes: [
+            {
+                id: "impl",
+                objective: "Implement",
+                modelScenario: "impl",
+                consumes: ["approved-spec"],
+                produces: ["implementation-done"],
+                evidence: [
+                    { id: "ev-x", source: "spec.md#impl", quote: "Implement as specified" },
+                ],
+                modelRationale: "Low-risk implementation work",
+                acceptanceCriteria: ["Must pass all tests", "Must pass lint"],
+                decompositionRationale: "Single-node implementation scope",
+            },
+        ],
+    };
+    const document = buildGoalDagFromSpec(spec);
+    const json = serializeGoalDagDocument(document);
+    // Each trace-only field/key must be absent from the runtime DAG JSON
+    assert.doesNotMatch(json, /"openQuestions"/);
+    assert.doesNotMatch(json, /"consumes"/);
+    assert.doesNotMatch(json, /"produces"/);
+    assert.doesNotMatch(json, /"evidence"/);
+    assert.doesNotMatch(json, /"modelRationale"/);
+    assert.doesNotMatch(json, /"acceptanceCriteria"/);
+    assert.doesNotMatch(json, /"decompositionRationale"/);
+    // Trace-only field values must also be absent
+    assert.doesNotMatch(json, /approved-spec/);
+    assert.doesNotMatch(json, /implementation-done/);
+    assert.doesNotMatch(json, /ev-x/);
+    assert.doesNotMatch(json, /Low-risk implementation work/);
+    assert.doesNotMatch(json, /Must pass all tests/);
+    assert.doesNotMatch(json, /Single-node implementation scope/);
+    // But runtime-required fields must be present
+    assert.match(json, /"objective": "Implement"/);
+    assert.match(json, /"modelScenario": "impl"/);
+    // Re-validate the stripped DAG is valid
+    const reparsed = validateGoalDagJson(json);
+    assert.equal(reparsed.nodes[0]?.id, "impl");
+    // Build trace and verify it preserves what the runtime DAG stripped
+    const trace = buildGoalDagPlanningTrace(spec, document);
+    assert.equal(trace.transitions[0]?.consumes[0], "approved-spec");
+    assert.equal(trace.transitions[0]?.produces[0], "implementation-done");
+    assert.equal(trace.evidence[0]?.id, "ev-x");
+    assert.equal(trace.evidence[0]?.quote, "Implement as specified");
+    assert.equal(trace.modelAssignments[0]?.reason, "Low-risk implementation work");
+    assert.deepEqual(trace.nodeQuality[0]?.acceptanceCriteria, [
+        "Must pass all tests",
+        "Must pass lint",
+    ]);
+    assert.equal(trace.nodeQuality[0]?.decompositionRationale, "Single-node implementation scope");
+    assert.deepEqual(trace.openQuestions, ["Q1: Confirm acceptance criteria"]);
+});
+test("final-verification fixture maps validators evidence and trace correctly", () => {
+    const spec = {
+        objective: "Ship feature X end-to-end",
+        defaults: {
+            validators: ["npm test"],
+            workspaceStrategy: "native-git-worktree",
+        },
+        modelRouting: {
+            scenarios: {
+                implementation: {
+                    model: "openai-codex/gpt-5.3-codex-spark",
+                },
+                review: { model: "deepseek/deepseek-v4-pro" },
+            },
+            defaultSubagentScenario: "implementation",
+        },
+        nodes: [
+            {
+                id: "write-spec",
+                objective: "Write specification for feature X",
+                produces: ["spec-drafted"],
+                evidence: [
+                    {
+                        id: "spec-ev",
+                        source: "prd.md#requirements",
+                        quote: "Feature X requires a specification document",
+                    },
+                ],
+                modelScenario: "implementation",
+                modelRationale: "Docs-only work fits spark model",
+                acceptanceCriteria: [
+                    "Spec covers all PRD requirements",
+                    "Spec passes markdown lint",
+                ],
+            },
+            {
+                id: "implement-x",
+                objective: "Implement feature X",
+                after: ["write-spec"],
+                consumes: ["spec-drafted"],
+                produces: ["implementation-done"],
+                validators: ["npm test", "npm run lint"],
+                risk: "medium",
+                evidence: [
+                    "PRD section 3 describes feature X requirements",
+                    {
+                        id: "impl-ev",
+                        source: "spec.md#implementation",
+                        quote: "Implement according to the specification",
+                    },
+                ],
+                modelScenario: "implementation",
+                acceptanceCriteria: [
+                    "All tests pass",
+                    "Code review approved",
+                ],
+            },
+            {
+                id: "review-x",
+                objective: "Review feature X implementation",
+                after: ["implement-x"],
+                consumes: ["implementation-done"],
+                produces: ["review-complete"],
+                validators: ["npm run audit"],
+                kind: "review",
+                validation: {
+                    profile: "code-change",
+                    requiredEvidence: ["validators-ran", "audit-report-present"],
+                    diffBaseRef: "main",
+                    allowedPaths: ["src/feature-x/**"],
+                    forbiddenPaths: ["infra/**", "secrets/**"],
+                },
+                modelScenario: "review",
+                modelRationale: "Review benefits from deepseek reasoning model",
+                acceptanceCriteria: [
+                    "No regressions detected",
+                    "Coverage >= 80%",
+                ],
+                decompositionRationale: "Single review gate for feature X",
+            },
+        ],
+    };
+    // Build the runtime DAG
+    const document = buildGoalDagFromSpec(spec);
+    assert.equal(document.nodes.length, 3, "all three nodes must be present");
+    // Validators mapped correctly to runtime DAG
+    assert.deepEqual(document.defaults?.validators, ["npm test"], "default validators must survive in runtime DAG");
+    assert.deepEqual(document.nodes[0]?.validators, undefined, "write-spec inherits no validators");
+    assert.deepEqual(document.nodes[1]?.validators, ["npm test", "npm run lint"], "implement-x must carry its own validators");
+    assert.deepEqual(document.nodes[2]?.validators, ["npm run audit"], "review-x must carry its own validators");
+    // Kind and validation contract in runtime DAG
+    assert.equal(document.nodes[2]?.kind, "review");
+    assert.equal(document.nodes[2]?.validation?.profile, "code-change");
+    assert.deepEqual(document.nodes[2]?.validation?.requiredEvidence, ["validators-ran", "audit-report-present"]);
+    assert.deepEqual(document.nodes[2]?.validation?.allowedPaths, ["src/feature-x/**"]);
+    assert.deepEqual(document.nodes[2]?.validation?.forbiddenPaths, ["infra/**", "secrets/**"]);
+    // Evidence must be stripped from runtime DAG
+    const dagJson = serializeGoalDagDocument(document);
+    assert.doesNotMatch(dagJson, /"evidence"/);
+    assert.doesNotMatch(dagJson, /spec-ev/);
+    assert.doesNotMatch(dagJson, /PRD section 3/);
+    assert.doesNotMatch(dagJson, /spec-drafted/);
+    assert.doesNotMatch(dagJson, /implementation-done/);
+    assert.doesNotMatch(dagJson, /review-complete/);
+    // Build the trace
+    const trace = buildGoalDagPlanningTrace(spec, document);
+    // Evidence in trace
+    assert.equal(trace.evidence.length, 3, "trace must collect 3 evidence items");
+    const specEv = trace.evidence.find((e) => e.id === "spec-ev");
+    assert.ok(specEv, "spec-ev must be in trace");
+    assert.equal(specEv?.source, "prd.md#requirements");
+    assert.equal(specEv?.nodeId, "write-spec");
+    // Transitions map consumes/produces/evidence
+    assert.deepEqual(trace.transitions[0]?.consumes, []);
+    assert.deepEqual(trace.transitions[0]?.produces, ["spec-drafted"]);
+    assert.deepEqual(trace.transitions[1]?.consumes, ["spec-drafted"]);
+    assert.deepEqual(trace.transitions[1]?.produces, ["implementation-done"]);
+    assert.deepEqual(trace.transitions[2]?.consumes, ["implementation-done"]);
+    assert.deepEqual(trace.transitions[2]?.produces, ["review-complete"]);
+    // Dependency review
+    assert.match(trace.dependencyReview[1]?.whyNotParallel ?? "", /Depends on write-spec/);
+    assert.match(trace.dependencyReview[2]?.whyNotParallel ?? "", /Depends on implement-x/);
+    // Model assignments
+    assert.equal(trace.modelAssignments[0]?.model, "openai-codex/gpt-5.3-codex-spark");
+    assert.equal(trace.modelAssignments[1]?.model, "openai-codex/gpt-5.3-codex-spark");
+    assert.equal(trace.modelAssignments[2]?.model, "deepseek/deepseek-v4-pro");
+    // Node quality with acceptanceCriteria
+    assert.deepEqual(trace.nodeQuality[0]?.acceptanceCriteria, [
+        "Spec covers all PRD requirements",
+        "Spec passes markdown lint",
+    ]);
+    assert.deepEqual(trace.nodeQuality[1]?.acceptanceCriteria, [
+        "All tests pass",
+        "Code review approved",
+    ]);
+    assert.deepEqual(trace.nodeQuality[2]?.acceptanceCriteria, [
+        "No regressions detected",
+        "Coverage >= 80%",
+    ]);
+    assert.equal(trace.nodeQuality[2]?.decompositionRationale, "Single review gate for feature X");
+    // No warnings expected for a well-formed fixture
+    const fixtureWarnings = trace.warnings.filter((w) => !w.includes("No acceptance handle"));
+    assert.equal(fixtureWarnings.length, 0, `unexpected trace warnings: ${fixtureWarnings.join("; ")}`);
+    // Trace is serializable
+    const traceJson = serializeGoalDagPlanningTrace(trace);
+    assert.doesNotThrow(() => JSON.parse(traceJson));
+    // Full round-trip: re-validate the runtime DAG
+    const reparsed = validateGoalDagJson(dagJson);
+    assert.equal(reparsed.objective, "Ship feature X end-to-end");
+    assert.equal(reparsed.nodes.length, 3);
+});
 //# sourceMappingURL=builder.test.js.map
