@@ -274,25 +274,15 @@ npm run check   # build + tests
 
 ### Build artifact policy
 
-`dist/` is **committed to the repo**, not gitignored. The runtime
-package does the same. The reason: `pi install` runs
-`npm install --omit=dev`, which means `tsc` is not on PATH during
-install — any `prepare` hook that tries to build will fail with
-`sh: 1: tsc: not found`. Shipping a pre-built `dist/` makes the
-package install-anywhere.
-
-**When you change `src/`, you must also rebuild `dist/` and commit
-the regenerated build output** — otherwise the published package
-will still ship the old compiled code:
+`dist/` is **gitignored** and regenerated locally:
 
 ```bash
 npm run check   # builds + runs tests
-git add src/ dist/
-git commit
+# src/ changes only; dist/ is not committed
 ```
 
-The `prepack` script still rebuilds on `npm pack` / `npm publish`
-to catch stale artifacts at release time.
+The `prepack` script rebuilds `dist/` before `npm pack` / `npm publish`,
+so published tarballs always include the latest compiled output.
 
 ### Runtime dependency
 
