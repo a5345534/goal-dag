@@ -21,7 +21,7 @@ layer before the runner:
   spec from a PRD, design doc, or OpenSpec change, assign models from
   a catalog, and emit a valid DAG file.
 
-The runner runtime stays the source of truth for the DAG schema and validation.
+goal-contract owns the runtime DAG parser/types/schema for the DAG schema and validation.
 This package only does two things:
 
 1. Reads a spec (which the agent or a script produces).
