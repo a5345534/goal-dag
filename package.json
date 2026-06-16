@@ -48,7 +48,7 @@
   },
   "homepage": "https://github.com/a5345534/goal-dag#readme",
   "dependencies": {
-    "goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
+    "goal-runner": "github:a5345534/goal-runner#f7ba1b341dc0232d5625b8bf895b55930e383b86"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

@@ -276,6 +276,23 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
   checks. When `openQuestions` are used as a node acceptance handle, prefix
   each question with the node id (for example,
   `implement-service: confirm expected service-layer acceptance criteria`).
+- **Map validation evidence to runtime-supported fields and `requiredEvidence` tokens.**
+  For deterministic shell checks in source text:
+  - Add the command in `validators`.
+  - Add `validation.requiredEvidence` with `"validators-ran"` so the runtime
+    requires successful command execution.
+  For audit requirements in source text:
+  - Add audit artifact paths to `validation.auditReportPaths`.
+  - Add `validation.requiredEvidence` with `"audit-report-present"` so the
+    runtime requires those paths to exist.
+  For path or scope restrictions in source text:
+  - Add `validation.allowedPaths` and/or `validation.forbiddenPaths`.
+    These are enforced directly by runtime validation and do not need
+    `requiredEvidence` tokens.
+  For textual acceptance-only requirements: use `acceptanceCriteria` and
+  source-grounded `evidence`; unresolved items become node-prefixed
+  `openQuestions` and are tracked in the trace.
+  Do not use `requiredEvidence` to replace missing deterministic checks.
 - **Do not use models outside the active model catalog.** Declare every chosen
   model in `modelRouting.scenarios`, then assign each node with `modelScenario`.
   Omit `modelScenario` only after warning the user that runtime fallback will
