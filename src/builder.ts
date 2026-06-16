@@ -1,6 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import {
   parseGoalDagFileDocument,
+  SUPPORTED_REQUIRED_EVIDENCE,
+  SUPPORTED_REQUIRED_EVIDENCE_SET,
+  CANONICAL_MODEL_ID_PATTERN,
   type GoalDagConflictHints,
   type GoalDagFileDefaults,
   type GoalDagFileDocument,
@@ -446,7 +449,6 @@ function cloneModelRouting(config: GoalModelRoutingConfig): GoalModelRoutingConf
   return out;
 }
 
-const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
 
 /**
  * Known evidence requirement tokens that the runtime validation runner
@@ -454,10 +456,6 @@ const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-
  * with an actionable error that directs the author to use `validators`,
  * `auditReportPaths`, or `acceptanceCriteria` instead.
  */
-import {
-  SUPPORTED_REQUIRED_EVIDENCE,
-  SUPPORTED_REQUIRED_EVIDENCE_SET,
-} from "goal-contract";
 
 /**
  * Producer-side preflight: reject `requiredEvidence` tokens the

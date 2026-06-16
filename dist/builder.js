@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseGoalDagFileDocument, } from "goal-contract";
+import { parseGoalDagFileDocument, SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, CANONICAL_MODEL_ID_PATTERN, } from "goal-contract";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
  * graph / model-scenario checks happen later in {@link buildGoalDagFromSpec}
@@ -296,14 +296,12 @@ function cloneModelRouting(config) {
         out.rules = config.rules.map((rule) => ({ ...rule }));
     return out;
 }
-const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
 /**
  * Known evidence requirement tokens that the runtime validation runner
  * can satisfy.  The producer rejects any other value during preflight
  * with an actionable error that directs the author to use `validators`,
  * `auditReportPaths`, or `acceptanceCriteria` instead.
  */
-import { SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, } from "goal-contract";
 /**
  * Producer-side preflight: reject `requiredEvidence` tokens the
  * runtime cannot act on, and redirect the author to the spec fields

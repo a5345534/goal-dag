@@ -26,7 +26,7 @@ This package only does two things:
 
 1. Reads a spec (which the agent or a script produces).
 2. Composes a draft DAG file from the spec and round-trips it through the
-   `goal-runner` parser exported as `parseGoalDagFileDocument()`. The parser is
+   `goal-contract` parser exported as `parseGoalDagFileDocument()`. The parser is
    the single source of truth for id pattern, dependency existence,
    self-dependency, cycle, model-scenario referential integrity, and runtime
    DAG field validation. The builder refuses to write an invalid DAG.
@@ -65,7 +65,7 @@ pi update
 ```
 
 The runtime dependency is pinned via `goal-dag`'s own `package.json` to
-`github:a5345534/goal-runner#f7ba1b341dc0232d5625b8bf895b55930e383b86`, so a
+`github:a5345534/goal-contract#3ce4d8f`, so a
 single install or update brings in the Stage 2 producer plus the Stage 3
 parser/runtime API it validates against. This pin includes the closed
 `requiredEvidence` runtime contract from issue #39.
@@ -318,7 +318,7 @@ to catch stale artifacts at release time.
 The package depends on `goal-runner` via a git ref:
 
 ```json
-"goal-runner": "github:a5345534/goal-runner#f7ba1b341dc0232d5625b8bf895b55930e383b86"
+"goal-runner": "github:a5345534/goal-contract#3ce4d8f"
 ```
 
 Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
