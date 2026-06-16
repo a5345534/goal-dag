@@ -38,10 +38,10 @@ those fields from the runtime DAG and can write a separate planning trace
 sidecar JSON. When `openQuestions` are used as a node acceptance handle, prefix
 the question with `<node-id>:` so the trace can be reviewed against that node.
 
-## Naming note: goal-runner
+## Naming note
 
-`goal-dag` depends on `goal-runner` for the Stage 3 parser/types and uses
-`goal-runner` consistently in code and user-facing docs.
+`goal-dag` depends on `goal-contract` for Stage 3 DAG parser/types/schema.
+`goal-runner` is referenced only as the downstream Stage 3 runtime consumer.
 
 - `goal-dag` is Stage 2 and only produces validated DAG JSON plus optional trace
   JSON.
@@ -280,7 +280,7 @@ the rationale behind splitting this Stage 2 Goal DAG producer out from the Stage
 └────────────────────────────────────────┘
 ```
 
-The goal-runner runtime owns the schema, validation, scheduling, validator
+goal-contract owns the runtime DAG parser/types/schema. goal-runner owns the execution runtime, scheduling, validator
 execution, completion decisions, and subagent orchestration. `goal-dag` owns the
 "how do I extract a DAG from a document" prompt / script / agentic workflow and
 the optional planning trace sidecar. New document-to-DAG workflows (Linear
@@ -315,10 +315,10 @@ to catch stale artifacts at release time.
 
 ### Runtime dependency
 
-The package depends on `goal-runner` via a git ref:
+The package depends on `goal-contract` via a git ref:
 
 ```json
-"goal-runner": "github:a5345534/goal-contract#3ce4d8f"
+"goal-contract": "github:a5345534/goal-contract#3ce4d8f"
 ```
 
 Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
