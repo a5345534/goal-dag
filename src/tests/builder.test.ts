@@ -115,7 +115,7 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
         sourceNodeId: "write-feature-tests",
       },
     ],
-    requiredEvidence: ["tests pass"],
+    requiredEvidence: ["validators-ran"],
     diffBaseRef: "main",
     allowedPaths: ["src/**", "tests/**"],
     forbiddenPaths: ["package-lock.json", "infra/**"],
@@ -141,7 +141,7 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
 
   validation.requiredEvidence?.push("mutated after build");
   if (validation.artifactLocks?.[0]) validation.artifactLocks[0].path = "mutated.ts";
-  assert.deepEqual(node?.validation?.requiredEvidence, ["tests pass"]);
+  assert.deepEqual(node?.validation?.requiredEvidence, ["validators-ran"]);
   assert.deepEqual(node?.validation?.allowedPaths, ["src/**", "tests/**"]);
   assert.deepEqual(node?.validation?.forbiddenPaths, ["package-lock.json", "infra/**"]);
   assert.equal(node?.validation?.artifactLocks?.[0]?.path, "src/feature.ts");
@@ -157,7 +157,7 @@ test("serializeGoalDagDocument includes kind implementation and validation contr
         kind: "implementation",
         validation: {
           profile: "code-change",
-          requiredEvidence: ["unit tests pass"],
+          requiredEvidence: ["audit-report-present"],
           diffBaseRef: "main",
           allowedPaths: ["src/**"],
           forbiddenPaths: ["secrets/**"],
@@ -195,6 +195,89 @@ test("buildGoalDagFromSpec forwards parser errors from the runtime", () => {
       }),
     /cycle/,
   );
+});
+
+test("buildGoalDagFromSpec rejects unsupported requiredEvidence tokens", () => {
+  assert.throws(
+    () =>
+      buildGoalDagFromSpec({
+        objective: "x",
+        nodes: [
+          {
+            id: "implement-feature",
+            objective: "Implement feature",
+            validation: {
+              requiredEvidence: ["manualEvidence"],
+            },
+          },
+        ],
+      }),
+    /unsupported value "manualEvidence"/,
+  );
+  assert.throws(
+    () =>
+      buildGoalDagFromSpec({
+        objective: "x",
+        nodes: [
+          {
+            id: "implement-feature",
+            objective: "Implement feature",
+            validation: {
+              requiredEvidence: ["validators-ran", "custom-check"],
+            },
+          },
+        ],
+      }),
+    /unsupported value "custom-check"/,
+  );
+  // Actionable error directs author to alternatives.
+  assert.throws(
+    () =>
+      buildGoalDagFromSpec({
+        objective: "x",
+        nodes: [
+          {
+            id: "implement-feature",
+            objective: "Implement feature",
+            validation: {
+              requiredEvidence: ["manualEvidence"],
+            },
+          },
+        ],
+      }),
+    /validators.*auditReportPaths.*acceptanceCriteria/,
+  );
+});
+
+test("buildGoalDagFromSpec passes through all supported requiredEvidence tokens", () => {
+  const document = buildGoalDagFromSpec({
+    objective: "x",
+    nodes: [
+      {
+        id: "implement-feature",
+        objective: "Implement feature",
+        validation: {
+          requiredEvidence: [
+            "validators-ran",
+            "locked-artifacts-unchanged",
+            "implementation-diff-present",
+            "non-test-diff-present",
+            "post-merge-validation-ran",
+            "audit-report-present",
+          ],
+        },
+      },
+    ],
+  });
+  const node = document.nodes.find((n) => n.id === "implement-feature");
+  assert.deepEqual(node?.validation?.requiredEvidence, [
+    "validators-ran",
+    "locked-artifacts-unchanged",
+    "implementation-diff-present",
+    "non-test-diff-present",
+    "post-merge-validation-ran",
+    "audit-report-present",
+  ]);
 });
 
 test("buildGoalDagFromSpecFile writes a parser-valid file", () => {
