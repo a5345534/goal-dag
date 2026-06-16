@@ -39,6 +39,5 @@ export type {
   GoalDagFileNode,
   GoalDagFileDefaults,
   GoalDagConflictHints,
-  GoalDagNode,
   GoalModelRoutingConfig,
 } from "./builder.js";

@@ -106,7 +106,7 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
     const node = document.nodes.find((item) => item.id === "implement-feature");
     assert.equal(node?.kind, "implementation");
     assert.deepEqual(node?.validation, validation);
-    validation.requiredEvidence?.push("mutated after build");
+    validation.requiredEvidence?.push("audit-report-present");
     if (validation.artifactLocks?.[0])
         validation.artifactLocks[0].path = "mutated.ts";
     assert.deepEqual(node?.validation?.requiredEvidence, ["validators-ran"]);

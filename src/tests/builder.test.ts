@@ -139,7 +139,7 @@ test("buildGoalDagFromSpec passes through node kind and validation contract", ()
   assert.equal(node?.kind, "implementation");
   assert.deepEqual(node?.validation, validation);
 
-  validation.requiredEvidence?.push("mutated after build");
+  validation.requiredEvidence?.push("audit-report-present");
   if (validation.artifactLocks?.[0]) validation.artifactLocks[0].path = "mutated.ts";
   assert.deepEqual(node?.validation?.requiredEvidence, ["validators-ran"]);
   assert.deepEqual(node?.validation?.allowedPaths, ["src/**", "tests/**"]);
@@ -207,7 +207,7 @@ test("buildGoalDagFromSpec rejects unsupported requiredEvidence tokens", () => {
             id: "implement-feature",
             objective: "Implement feature",
             validation: {
-              requiredEvidence: ["manualEvidence"],
+              requiredEvidence: ["manualEvidence" as any],
             },
           },
         ],
@@ -223,7 +223,7 @@ test("buildGoalDagFromSpec rejects unsupported requiredEvidence tokens", () => {
             id: "implement-feature",
             objective: "Implement feature",
             validation: {
-              requiredEvidence: ["validators-ran", "custom-check"],
+              requiredEvidence: ["validators-ran", "custom-check" as any],
             },
           },
         ],
@@ -240,7 +240,7 @@ test("buildGoalDagFromSpec rejects unsupported requiredEvidence tokens", () => {
             id: "implement-feature",
             objective: "Implement feature",
             validation: {
-              requiredEvidence: ["manualEvidence"],
+              requiredEvidence: ["manualEvidence" as any],
             },
           },
         ],
@@ -1064,7 +1064,7 @@ test("producer schema requiredEvidence enum is consistent with builder supported
         {
           id: "impl",
           objective: "Implement",
-          validation: { requiredEvidence: [token] },
+          validation: { requiredEvidence: [token as any] },
         },
       ],
     });
@@ -1083,7 +1083,7 @@ test("producer schema requiredEvidence enum is consistent with builder supported
         {
           id: "impl",
           objective: "Implement",
-          validation: { requiredEvidence: [token] },
+          validation: { requiredEvidence: [token as any] },
         },
       ],
     });

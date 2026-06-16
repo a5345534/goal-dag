@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseGoalDagFileDocument, } from "goal-runner";
+import { parseGoalDagFileDocument, } from "goal-contract";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
  * graph / model-scenario checks happen later in {@link buildGoalDagFromSpec}
@@ -303,14 +303,7 @@ const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-
  * with an actionable error that directs the author to use `validators`,
  * `auditReportPaths`, or `acceptanceCriteria` instead.
  */
-const SUPPORTED_REQUIRED_EVIDENCE_TOKENS = new Set([
-    "validators-ran",
-    "locked-artifacts-unchanged",
-    "implementation-diff-present",
-    "non-test-diff-present",
-    "post-merge-validation-ran",
-    "audit-report-present",
-]);
+import { SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, } from "goal-contract";
 /**
  * Producer-side preflight: reject `requiredEvidence` tokens the
  * runtime cannot act on, and redirect the author to the spec fields
@@ -322,11 +315,11 @@ function validateRequiredEvidenceTokens(spec) {
         if (!evidence || evidence.length === 0)
             continue;
         for (const token of evidence) {
-            if (SUPPORTED_REQUIRED_EVIDENCE_TOKENS.has(token))
+            if (SUPPORTED_REQUIRED_EVIDENCE_SET.has(token))
                 continue;
             throw new Error(`Invalid goal DAG spec: nodes[${nodeIndex}].validation.requiredEvidence ` +
                 `contains unsupported value ${JSON.stringify(token)}. ` +
-                `Supported values: ${[...SUPPORTED_REQUIRED_EVIDENCE_TOKENS].join(", ")}. ` +
+                `Supported values: ${SUPPORTED_REQUIRED_EVIDENCE.join(", ")}. ` +
                 `Alternatively, use node validators, validation.auditReportPaths, ` +
                 `or acceptanceCriteria instead of requiredEvidence.`);
         }

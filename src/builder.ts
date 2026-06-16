@@ -5,10 +5,10 @@ import {
   type GoalDagFileDefaults,
   type GoalDagFileDocument,
   type GoalDagFileNode,
-  type GoalDagNode,
   type GoalDagNodeWorkspaceBinding,
+  type GoalDagRisk,
   type GoalModelRoutingConfig,
-} from "goal-runner";
+} from "goal-contract";
 
 export interface GoalDagSpecEvidenceReference {
   id?: string;
@@ -42,7 +42,7 @@ export interface GoalDagSpecNode {
   workspaceStrategy?: string;
   /** Deterministic node worktree/branch binding. Native-git nodes default worktreeSlug to node id when omitted. */
   workspace?: GoalDagNodeWorkspaceBinding;
-  risk?: GoalDagNode["risk"];
+  risk?: GoalDagRisk;
   completionGates?: string[];
   modelScenario?: string;
   /** Pi thinking level for subagent sessions: off|minimal|low|medium|high|xhigh. */
@@ -73,7 +73,7 @@ export interface GoalDagSpecNode {
  * the runtime's on-disk schema.
  */
 export interface GoalDagSpecDefaults extends GoalDagFileDefaults {
-  risk?: GoalDagNode["risk"];
+  risk?: GoalDagRisk;
 }
 
 export interface GoalDagSpec {
@@ -329,7 +329,7 @@ export function validateGoalDagJson(content: string): GoalDagFileDocument {
   return parseGoalDagFileDocument(JSON.parse(content) as unknown);
 }
 
-function cloneNode(node: GoalDagSpecNode, defaultRisk: GoalDagNode["risk"] | undefined, defaultWorkspaceStrategy: string | undefined): GoalDagFileNode {
+function cloneNode(node: GoalDagSpecNode, defaultRisk: GoalDagRisk | undefined, defaultWorkspaceStrategy: string | undefined): GoalDagFileNode {
   const out: GoalDagFileNode = {
     id: node.id,
     objective: node.objective,
@@ -454,14 +454,10 @@ const CANONICAL_MODEL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*\/[a-
  * with an actionable error that directs the author to use `validators`,
  * `auditReportPaths`, or `acceptanceCriteria` instead.
  */
-const SUPPORTED_REQUIRED_EVIDENCE_TOKENS = new Set<string>([
-  "validators-ran",
-  "locked-artifacts-unchanged",
-  "implementation-diff-present",
-  "non-test-diff-present",
-  "post-merge-validation-ran",
-  "audit-report-present",
-]);
+import {
+  SUPPORTED_REQUIRED_EVIDENCE,
+  SUPPORTED_REQUIRED_EVIDENCE_SET,
+} from "goal-contract";
 
 /**
  * Producer-side preflight: reject `requiredEvidence` tokens the
@@ -473,11 +469,11 @@ function validateRequiredEvidenceTokens(spec: GoalDagSpec): void {
     const evidence = node.validation?.requiredEvidence;
     if (!evidence || evidence.length === 0) continue;
     for (const token of evidence) {
-      if (SUPPORTED_REQUIRED_EVIDENCE_TOKENS.has(token)) continue;
+      if (SUPPORTED_REQUIRED_EVIDENCE_SET.has(token)) continue;
       throw new Error(
         `Invalid goal DAG spec: nodes[${nodeIndex}].validation.requiredEvidence ` +
           `contains unsupported value ${JSON.stringify(token)}. ` +
-          `Supported values: ${[...SUPPORTED_REQUIRED_EVIDENCE_TOKENS].join(", ")}. ` +
+          `Supported values: ${SUPPORTED_REQUIRED_EVIDENCE.join(", ")}. ` +
           `Alternatively, use node validators, validation.auditReportPaths, ` +
           `or acceptanceCriteria instead of requiredEvidence.`,
       );
@@ -763,7 +759,7 @@ export type {
   GoalDagFileDefaults,
   GoalDagFileDocument,
   GoalDagFileNode,
-  GoalDagNode,
   GoalDagNodeWorkspaceBinding,
+  GoalDagRisk,
   GoalModelRoutingConfig,
 };

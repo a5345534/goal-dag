@@ -1,4 +1,4 @@
-import { type GoalDagConflictHints, type GoalDagFileDefaults, type GoalDagFileDocument, type GoalDagFileNode, type GoalDagNode, type GoalDagNodeWorkspaceBinding, type GoalModelRoutingConfig } from "goal-runner";
+import { type GoalDagConflictHints, type GoalDagFileDefaults, type GoalDagFileDocument, type GoalDagFileNode, type GoalDagNodeWorkspaceBinding, type GoalDagRisk, type GoalModelRoutingConfig } from "goal-contract";
 export interface GoalDagSpecEvidenceReference {
     id?: string;
     source?: string;
@@ -29,7 +29,7 @@ export interface GoalDagSpecNode {
     workspaceStrategy?: string;
     /** Deterministic node worktree/branch binding. Native-git nodes default worktreeSlug to node id when omitted. */
     workspace?: GoalDagNodeWorkspaceBinding;
-    risk?: GoalDagNode["risk"];
+    risk?: GoalDagRisk;
     completionGates?: string[];
     modelScenario?: string;
     /** Pi thinking level for subagent sessions: off|minimal|low|medium|high|xhigh. */
@@ -57,7 +57,7 @@ export interface GoalDagSpecNode {
  * the runtime's on-disk schema.
  */
 export interface GoalDagSpecDefaults extends GoalDagFileDefaults {
-    risk?: GoalDagNode["risk"];
+    risk?: GoalDagRisk;
 }
 export interface GoalDagSpec {
     /** Optional file-format version. Defaults to `1`. */
@@ -171,4 +171,4 @@ export declare function serializeGoalDagPlanningTrace(trace: GoalDagPlanningTrac
  * the user.
  */
 export declare function validateGoalDagJson(content: string): GoalDagFileDocument;
-export type { GoalDagConflictHints, GoalDagFileDefaults, GoalDagFileDocument, GoalDagFileNode, GoalDagNode, GoalDagNodeWorkspaceBinding, GoalModelRoutingConfig, };
+export type { GoalDagConflictHints, GoalDagFileDefaults, GoalDagFileDocument, GoalDagFileNode, GoalDagNodeWorkspaceBinding, GoalDagRisk, GoalModelRoutingConfig, };
