@@ -1,8 +1,8 @@
 # Model routing scenarios
 
-When different nodes in a DAG deserve different models (for example, a
-"review" node benefits from a stronger reviewer model, while a "docs" node
-just needs a cheap model), declare `modelRouting` in the spec.
+DAGs route to abstract `modelClass` values. Concrete provider/model ids are not
+valid in `modelRouting`; goal-runner resolves classes through harness bindings
+and records evidence at runtime.
 
 ## Shape
 
@@ -10,10 +10,10 @@ just needs a cheap model), declare `modelRouting` in the spec.
 {
   "modelRouting": {
     "scenarios": {
-      "controller":     { "model": "openai-codex/gpt-5.5" },
-      "implementation": { "model": "deepseek/deepseek-v4-pro" },
-      "docs":           { "model": "openai-codex/gpt-5.3-codex-spark" },
-      "review":         { "model": "deepseek/deepseek-v4-pro" }
+      "controller":     { "modelClass": "controller" },
+      "implementation": { "modelClass": "implementation" },
+      "docs":           { "modelClass": "implementation" },
+      "review":         { "modelClass": "strict-reviewer" }
     },
     "controllerScenario": "controller",
     "defaultSubagentScenario": "implementation",
@@ -33,7 +33,9 @@ For each node, the runtime picks a scenario in this order:
 2. `defaults.modelScenario` from the spec.
 3. The first matching `modelRouting.rules[]` entry.
 4. `modelRouting.defaultSubagentScenario`.
-5. The current Pi session model (fallback).
+
+If no scenario resolves, runtime must block rather than silently fall back to a
+current session model.
 
 Rule `when` supports:
 
@@ -50,15 +52,13 @@ Rule `when` supports:
 ## When to use a routing table
 
 - More than three nodes with distinct work shapes (impl / docs / review /
-  archive) — declare scenarios so each node can pick the right model.
-- Some nodes touch high-risk areas and deserve a stronger reviewer model.
-- The controller should use a dedicated orchestration model while subagents use
+  archive) — declare scenarios so each node can pick the right class.
+- Some nodes touch high-risk areas and deserve a strict reviewer class.
+- The controller should use a dedicated orchestration class while subagents use
   a different default.
 
 ## When **not** to use one
 
-- The whole DAG uses one model — let the runtime fall back to the session
-  model and skip `modelRouting` entirely.
-- You're unsure which model to use for which node — start without
-  `modelRouting`, finish the goal, then add a routing table on the next
-  iteration.
+- Every node can safely use a single declared default scenario.
+- The source lacks enough information to choose classes — ask the user instead
+  of emitting ambiguous routing.

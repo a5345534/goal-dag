@@ -1,50 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { parseModelCatalogContent, parseModelCatalogDocument } from "../index.js";
+import { parseModelCatalogDocument } from "../index.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const CATALOG_PATH = resolve(HERE, "..", "..", "catalogs", "pi-available-models.json");
+const validCatalog = {
+  modelRouting: {
+    controllerScenario: "controller",
+    defaultSubagentScenario: "implementation",
+    rules: [
+      {
+        when: { role: "controller" },
+        modelScenario: "controller",
+        modelClass: "controller",
+      },
+      {
+        when: { risk: ["low", "medium"], taskType: "implementation" },
+        modelScenario: "implementation",
+        modelClass: "implementation",
+      },
+      {
+        when: { taskType: "review" },
+        modelScenario: "review",
+        modelClass: "strict-reviewer",
+      },
+    ],
+  },
+};
 
-test("default Pi model routing catalog parses", () => {
-  const catalog = parseModelCatalogContent(readFileSync(CATALOG_PATH, "utf8"));
+test("model routing catalog parser accepts modelClass rules", () => {
+  const catalog = parseModelCatalogDocument(validCatalog);
   assert.equal(catalog.modelRouting.controllerScenario, "controller");
-  assert.equal(catalog.modelRouting.defaultSubagentScenario, "spark-implementation");
-  assert.equal(catalog.modelRouting.rules.length, 14);
+  assert.equal(catalog.modelRouting.defaultSubagentScenario, "implementation");
+  assert.equal(catalog.modelRouting.rules.length, 3);
 
   const scenarios = new Set(catalog.modelRouting.rules.map((rule) => rule.modelScenario));
-  assert.deepEqual(
-    [...scenarios].sort(),
-    [
-      "controller",
-      "critical-decision",
-      "final-authority",
-      "implementation",
-      "local-private",
-      "long-context-docs",
-      "long-context-reasoning",
-      "long-context-scan",
-      "review",
-      "spark-docs",
-      "spark-implementation",
-    ],
-  );
-});
-
-test("default Pi model routing catalog contains expected model ids", () => {
-  const catalog = parseModelCatalogContent(readFileSync(CATALOG_PATH, "utf8"));
-  const models = new Set(catalog.modelRouting.rules.map((rule) => rule.model));
-  for (const id of [
-    "deepseek/deepseek-v4-flash",
-    "deepseek/deepseek-v4-pro",
-    "local-aeon/aeon",
-    "openai-codex/gpt-5.3-codex-spark",
-    "openai-codex/gpt-5.5",
-  ]) {
-    assert.ok(models.has(id), `missing ${id}`);
-  }
+  assert.deepEqual([...scenarios].sort(), ["controller", "implementation", "review"]);
+  assert.equal(catalog.modelRouting.rules[2].modelClass, "strict-reviewer");
 });
 
 test("model routing catalog parser rejects an unknown default scenario", () => {
@@ -57,12 +47,30 @@ test("model routing catalog parser rejects an unknown default scenario", () => {
             {
               when: { taskType: ["docs"] },
               modelScenario: "docs",
-              model: "p/m",
+              modelClass: "implementation",
             },
           ],
         },
       }),
     /defaultSubagentScenario must reference a modelScenario used by at least one rule/,
+  );
+});
+
+test("model routing catalog parser rejects legacy concrete model fields", () => {
+  assert.throws(
+    () =>
+      parseModelCatalogDocument({
+        modelRouting: {
+          rules: [
+            {
+              when: { taskType: ["docs"] },
+              modelScenario: "docs",
+              model: "provider/model",
+            },
+          ],
+        },
+      }),
+    /model is unsupported; use modelClass/,
   );
 });
 
@@ -75,7 +83,7 @@ test("model routing catalog parser rejects empty when blocks", () => {
             {
               when: {},
               modelScenario: "docs",
-              model: "p/m",
+              modelClass: "implementation",
             },
           ],
         },
@@ -93,7 +101,7 @@ test("model routing catalog parser rejects unsupported rule fields", () => {
             {
               when: { taskType: ["docs"] },
               modelScenario: "docs",
-              model: "p/m",
+              modelClass: "implementation",
               extra: true,
             },
           ],

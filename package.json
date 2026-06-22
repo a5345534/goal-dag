@@ -24,7 +24,6 @@
     "dist",
     "skills",
     "schemas",
-    "catalogs",
     "docs",
     "README.md"
   ],
@@ -48,7 +47,7 @@
   },
   "homepage": "https://github.com/a5345534/goal-dag#readme",
   "dependencies": {
-    "goal-contract": "github:a5345534/goal-contract#dc48e42f98e8c585fad8f5f2c94ab42c9cdcca86"
+    "goal-contract": "github:a5345534/goal-contract#8523c07"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

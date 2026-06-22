@@ -3,8 +3,8 @@ export type ModelRoutingConditionValue = ModelRoutingConditionScalar | ModelRout
 export interface ModelRoutingCatalogRule {
     when: Record<string, ModelRoutingConditionValue>;
     modelScenario: string;
-    /** Canonical Pi model argument, for example "openai-codex/gpt-5.5". */
-    model: string;
+    /** Abstract model class id. Concrete provider/model ids are runner binding data. */
+    modelClass: string;
 }
 export interface ModelRoutingCatalogConfig {
     controllerScenario?: string;

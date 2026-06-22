@@ -20,7 +20,7 @@ Producer-side schema reference:
 | `version` | yes | `1` | File format version. Only `1` is accepted. |
 | `objective` | yes | non-empty string | The goal objective shown in status / monitor and used for the controller session. |
 | `defaults` | no | object | Defaults copied to nodes that do not override them, including runtime fields such as `outputs`, `validators`, `workspaceStrategy`, `completionGates`, `conflicts`, `modelScenario`, and `thinkingLevel`. |
-| `modelRouting` | no | object | Scenario-to-model routing table used by Pi for the controller session and DAG node subagents. |
+| `modelRouting` | no | object | Scenario-to-`modelClass` routing table. Concrete provider/model resolution is runner/harness-only. |
 | `nodes` | yes | non-empty array (≤ 20) | Explicit DAG nodes. |
 
 ## Runtime DAG node fields
@@ -57,10 +57,9 @@ Producer-side schema reference:
 - `defaults.thinkingLevel` is a runtime default applied by goal-runner to nodes that do not set node-level `thinkingLevel`. It must pass through into the emitted DAG.
 - `modelScenario` references an entry in `modelRouting.scenarios` (when
   `modelRouting` is declared) — or `modelRouting` must declare the scenario.
-- **Model ID canonical format**: all `model` fields in `modelRouting.scenarios`
-  MUST use `provider/model` (slash-separated, for example `openai-codex/gpt-5.5`).
-  The `provider.model` (dot-separated) form IS REJECTED. Other agent adapters
-  map from this canonical format to their native form.
+- `modelRouting.scenarios.*` MUST use `modelClass`. Legacy concrete `model`
+  fields are rejected. Concrete provider/model ids belong only in
+  goal-runner harness binding catalogs.
 - `outputs` are workspace-root-relative artifact paths. Put deterministic worktree/branch binding in `workspace`; do not put `.worktrees/<slug>/...` in outputs.
 
 `goal-dag build-dag` rejects any spec that violates these rules.

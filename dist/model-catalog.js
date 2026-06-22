@@ -37,11 +37,11 @@ function parseModelRouting(input, path) {
 function parseModelRoutingRule(input, path) {
     if (!isRecord(input))
         throw new Error(`Invalid model catalog: ${path} must be an object`);
-    assertKnownKeys(input, ["when", "modelScenario", "model"], path);
+    assertKnownKeys(input, ["when", "modelScenario", "modelClass"], path);
     return {
         when: parseWhen(input.when, `${path}.when`),
         modelScenario: requireNonEmptyString(input.modelScenario, `${path}.modelScenario`),
-        model: requireNonEmptyString(input.model, `${path}.model`),
+        modelClass: requireModelClass(input.modelClass, `${path}.modelClass`),
     };
 }
 function parseWhen(input, path) {
@@ -83,9 +83,19 @@ function assertScenarioHasRule(scenarioIds, scenario, path) {
 function assertKnownKeys(input, allowedKeys, path) {
     const allowed = new Set(allowedKeys);
     for (const key of Object.keys(input)) {
+        if (key === "model") {
+            throw new Error(`Invalid model catalog: ${path}.model is unsupported; use modelClass`);
+        }
         if (!allowed.has(key))
             throw new Error(`Invalid model catalog: ${path}.${key} is not supported`);
     }
+}
+function requireModelClass(input, path) {
+    const value = requireNonEmptyString(input, path);
+    if (!/^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/.test(value)) {
+        throw new Error(`Invalid model catalog: ${path} must be a modelClass id`);
+    }
+    return value;
 }
 function requireNonEmptyString(input, path) {
     if (typeof input !== "string" || !input.trim())

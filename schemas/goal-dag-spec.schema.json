@@ -5,18 +5,34 @@
   "description": "Producer-side GoalDagSpec accepted by goal-dag before round-tripping through the goal-runner parser. Spec-only fields are stripped from runtime DAG JSON and preserved in the planning trace sidecar.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["objective", "nodes"],
+  "required": [
+    "objective",
+    "nodes"
+  ],
   "properties": {
-    "version": { "const": 1 },
-    "objective": { "type": "string", "minLength": 1 },
-    "defaults": { "$ref": "#/$defs/defaults" },
-    "modelRouting": { "$ref": "#/$defs/modelRouting" },
-    "openQuestions": { "$ref": "#/$defs/nonEmptyStringArray" },
+    "version": {
+      "const": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "modelRouting": {
+      "$ref": "#/$defs/modelRouting"
+    },
+    "openQuestions": {
+      "$ref": "#/$defs/nonEmptyStringArray"
+    },
     "nodes": {
       "type": "array",
       "minItems": 1,
       "maxItems": 20,
-      "items": { "$ref": "#/$defs/node" }
+      "items": {
+        "$ref": "#/$defs/node"
+      }
     }
   },
   "$defs": {
@@ -26,114 +42,264 @@
     },
     "nonEmptyStringArray": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
-    "risk": { "enum": ["low", "medium", "high"] },
+    "risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
     "defaults": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "outputs": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "validators": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "workspaceStrategy": { "type": "string", "minLength": 1 },
-        "completionGates": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "conflicts": { "$ref": "#/$defs/conflicts" },
-        "modelScenario": { "type": "string", "minLength": 1 },
-        "thinkingLevel": { "type": "string", "minLength": 1 },
-        "risk": { "$ref": "#/$defs/risk" }
+        "outputs": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "validators": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "workspaceStrategy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completionGates": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "conflicts": {
+          "$ref": "#/$defs/conflicts"
+        },
+        "modelScenario": {
+          "type": "string",
+          "minLength": 1
+        },
+        "thinkingLevel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk": {
+          "$ref": "#/$defs/risk"
+        }
       }
     },
     "node": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "objective"],
+      "required": [
+        "id",
+        "objective"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/nodeId" },
-        "objective": { "type": "string", "minLength": 1 },
+        "id": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        },
         "after": {
           "type": "array",
-          "items": { "$ref": "#/$defs/nodeId" }
+          "items": {
+            "$ref": "#/$defs/nodeId"
+          }
         },
-        "outputs": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "validators": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "conflicts": { "$ref": "#/$defs/conflicts" },
-        "scope": { "type": "string", "minLength": 1 },
-        "kind": { "type": "string", "minLength": 1 },
-        "validation": { "$ref": "#/$defs/validation" },
-        "workspaceStrategy": { "type": "string", "minLength": 1 },
-        "workspace": { "$ref": "#/$defs/workspace" },
-        "risk": { "$ref": "#/$defs/risk" },
-        "completionGates": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "modelScenario": { "type": "string", "minLength": 1 },
-        "thinkingLevel": { "type": "string", "minLength": 1 },
-        "consumes": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "produces": { "$ref": "#/$defs/nonEmptyStringArray" },
+        "outputs": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "validators": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "conflicts": {
+          "$ref": "#/$defs/conflicts"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validation": {
+          "$ref": "#/$defs/validation"
+        },
+        "workspaceStrategy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspace": {
+          "$ref": "#/$defs/workspace"
+        },
+        "risk": {
+          "$ref": "#/$defs/risk"
+        },
+        "completionGates": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "modelScenario": {
+          "type": "string",
+          "minLength": 1
+        },
+        "thinkingLevel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consumes": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "produces": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
         "evidence": {
           "type": "array",
           "items": {
             "oneOf": [
-              { "type": "string", "minLength": 1 },
-              { "$ref": "#/$defs/evidenceReference" }
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/evidenceReference"
+              }
             ]
           }
         },
-        "modelRationale": { "type": "string", "minLength": 1 },
-        "acceptanceCriteria": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "decompositionRationale": { "type": "string", "minLength": 1 }
+        "modelRationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptanceCriteria": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "decompositionRationale": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "conflicts": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "files": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "modules": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "capabilities": { "$ref": "#/$defs/nonEmptyStringArray" }
+        "files": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "modules": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
       }
     },
     "workspace": {
       "type": "object",
       "additionalProperties": false,
       "anyOf": [
-        { "required": ["worktreeSlug"] },
-        { "required": ["branch"] },
-        { "required": ["baseRef"] }
+        {
+          "required": [
+            "worktreeSlug"
+          ]
+        },
+        {
+          "required": [
+            "branch"
+          ]
+        },
+        {
+          "required": [
+            "baseRef"
+          ]
+        }
       ],
       "properties": {
-        "worktreeSlug": { "type": "string", "minLength": 1 },
-        "branch": { "type": "string", "minLength": 1 },
-        "baseRef": { "type": "string", "minLength": 1 }
+        "worktreeSlug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseRef": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "validation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "profile": { "type": "string", "minLength": 1 },
-        "testSpecNodeId": { "$ref": "#/$defs/nodeId" },
-        "approvedByNodeId": { "$ref": "#/$defs/nodeId" },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "testSpecNodeId": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "approvedByNodeId": {
+          "$ref": "#/$defs/nodeId"
+        },
         "artifactLocks": {
           "type": "array",
-          "items": { "$ref": "#/$defs/artifactLock" }
+          "items": {
+            "$ref": "#/$defs/artifactLock"
+          }
         },
-        "requiredEvidence": { "$ref": "#/$defs/requiredEvidence" },
-        "onAuditTestGap": { "type": "string", "minLength": 1 },
-        "diffBaseRef": { "type": "string", "minLength": 1 },
-        "auditReportPaths": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "allowedPaths": { "$ref": "#/$defs/nonEmptyStringArray" },
-        "forbiddenPaths": { "$ref": "#/$defs/nonEmptyStringArray" }
+        "requiredEvidence": {
+          "$ref": "#/$defs/requiredEvidence"
+        },
+        "onAuditTestGap": {
+          "type": "string",
+          "minLength": 1
+        },
+        "diffBaseRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "auditReportPaths": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "allowedPaths": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "forbiddenPaths": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
       }
     },
     "artifactLock": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "sha256"],
+      "required": [
+        "path",
+        "sha256"
+      ],
       "properties": {
-        "path": { "type": "string", "minLength": 1 },
-        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
-        "sourceNodeId": { "$ref": "#/$defs/nodeId" },
-        "approvedByNodeId": { "$ref": "#/$defs/nodeId" },
-        "approvedAt": { "type": "string", "minLength": 1 }
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "sourceNodeId": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "approvedByNodeId": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "approvedAt": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "requiredEvidence": {
@@ -155,11 +321,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "source": { "type": "string", "minLength": 1 },
-        "quote": { "type": "string", "minLength": 1 },
-        "note": { "type": "string", "minLength": 1 },
-        "supports": { "$ref": "#/$defs/nonEmptyStringArray" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supports": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
       }
     },
     "modelRouting": {
@@ -170,20 +350,33 @@
           "type": "object",
           "additionalProperties": {
             "type": "object",
-            "required": ["model"],
+            "required": [
+              "modelClass"
+            ],
             "additionalProperties": true,
             "properties": {
-              "model": {
+              "modelClass": {
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z][a-z0-9]*)*/[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
               },
-              "description": { "type": "string" }
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
-        "controllerScenario": { "type": "string", "minLength": 1 },
-        "defaultSubagentScenario": { "type": "string", "minLength": 1 },
-        "rules": { "type": "array" }
+        "controllerScenario": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultSubagentScenario": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array"
+        }
       }
     }
   }

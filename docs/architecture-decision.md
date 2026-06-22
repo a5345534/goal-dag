@@ -108,20 +108,20 @@ Stage 3 parser/schema surface; it includes `validation.allowedPaths`,
 This split keeps the creative and mechanical parts on opposite sides
 of a stable API boundary.
 
-### Model assignment is LLM-driven through a catalog
+### Model assignment is LLM-driven through abstract classes
 
-The `goal-dag` package ships `catalogs/pi-available-models.json`. The catalog
-contains ordered model-routing rules that map agent/LLM-facing task traits
-(task type, risk, privacy, and estimated context) to recommended Pi model ids.
+`goal-dag` emits abstract `modelClass` routing only. Concrete provider/model ids
+are not producer data; they belong to `goal-runner` harness binding catalogs and
+are resolved at runtime with evidence.
 
-The deterministic part validates the catalog shape. The creative part remains
-with the LLM: the skill must show a model assignment table, translate chosen
-catalog scenarios into runtime-compatible `modelRouting.scenarios`, and then
-write explicit per-node `modelScenario` values plus `modelRationale` into the
-`GoalDagSpec`.
+The deterministic part validates the advisory catalog shape. The creative part
+remains with the LLM: the skill must show a model assignment table, translate
+chosen class scenarios into runtime-compatible `modelRouting.scenarios`, and
+then write explicit per-node `modelScenario` values plus `modelRationale` into
+the `GoalDagSpec`.
 
-Project-specific catalogs can override the package default through
-`.goal/model-catalog.json`.
+Project-specific advisory catalogs can live at `.goal/model-catalog.json`, but
+they must map to `modelClass`, not concrete `model` ids.
 
 ### The build artifact is committed
 

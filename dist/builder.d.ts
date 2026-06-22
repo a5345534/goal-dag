@@ -92,7 +92,7 @@ export interface GoalDagPlanningTraceDependencyReview {
 export interface GoalDagPlanningTraceModelAssignment {
     nodeId: string;
     scenario?: string;
-    model?: string;
+    modelClass?: string;
     reason: string;
     warnings?: string[];
 }

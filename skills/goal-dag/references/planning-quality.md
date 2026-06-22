@@ -122,7 +122,7 @@ A node is too large when:
 - Its objective contains unrelated "and" work.
 - It combines design, implementation, testing, and documentation.
 - It touches several modules without a clear boundary.
-- It would force the strongest model only because the node scope is broad.
+- It would force the strictest model class only because the node scope is broad.
 - It requires the subagent to discover the real sub-tasks after starting.
 - It cannot be independently verified.
 
@@ -221,7 +221,7 @@ Only use a pattern boundary when the source directly states or strongly implies 
 ## Model-routing implications
 
 - Use a strong/long-context model for the extraction + planning review when the document is long or ambiguous.
-- Use cheaper/faster models for low-risk leaf nodes with narrow scope.
+- Use lighter model classes for low-risk leaf nodes with narrow scope.
 - Use stronger models for final synthesis, audits, migrations, security-sensitive work, and high fan-in integration nodes.
 - Prefer explicit per-node `modelScenario` values so the reviewed plan is replayable and diffable.
 

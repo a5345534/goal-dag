@@ -4,8 +4,8 @@ export type ModelRoutingConditionValue = ModelRoutingConditionScalar | ModelRout
 export interface ModelRoutingCatalogRule {
   when: Record<string, ModelRoutingConditionValue>;
   modelScenario: string;
-  /** Canonical Pi model argument, for example "openai-codex/gpt-5.5". */
-  model: string;
+  /** Abstract model class id. Concrete provider/model ids are runner binding data. */
+  modelClass: string;
 }
 
 export interface ModelRoutingCatalogConfig {
@@ -60,11 +60,11 @@ function parseModelRouting(input: unknown, path: string): ModelRoutingCatalogCon
 
 function parseModelRoutingRule(input: unknown, path: string): ModelRoutingCatalogRule {
   if (!isRecord(input)) throw new Error(`Invalid model catalog: ${path} must be an object`);
-  assertKnownKeys(input, ["when", "modelScenario", "model"], path);
+  assertKnownKeys(input, ["when", "modelScenario", "modelClass"], path);
   return {
     when: parseWhen(input.when, `${path}.when`),
     modelScenario: requireNonEmptyString(input.modelScenario, `${path}.modelScenario`),
-    model: requireNonEmptyString(input.model, `${path}.model`),
+    modelClass: requireModelClass(input.modelClass, `${path}.modelClass`),
   };
 }
 
@@ -104,8 +104,19 @@ function assertScenarioHasRule(scenarioIds: Set<string>, scenario: string, path:
 function assertKnownKeys(input: Record<string, unknown>, allowedKeys: string[], path: string): void {
   const allowed = new Set(allowedKeys);
   for (const key of Object.keys(input)) {
+    if (key === "model") {
+      throw new Error(`Invalid model catalog: ${path}.model is unsupported; use modelClass`);
+    }
     if (!allowed.has(key)) throw new Error(`Invalid model catalog: ${path}.${key} is not supported`);
   }
+}
+
+function requireModelClass(input: unknown, path: string): string {
+  const value = requireNonEmptyString(input, path);
+  if (!/^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/.test(value)) {
+    throw new Error(`Invalid model catalog: ${path} must be a modelClass id`);
+  }
+  return value;
 }
 
 function requireNonEmptyString(input: unknown, path: string): string {

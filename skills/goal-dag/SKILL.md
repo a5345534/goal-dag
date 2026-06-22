@@ -130,13 +130,12 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    is the source of truth for the goal objective, requirements, constraints,
    and supported node boundaries.
 
-2. **Read the model catalog** before assigning models. Prefer a project-local
-   `.goal/model-catalog.json` when present; otherwise use this package's
-   [`../../catalogs/pi-available-models.json`](../../catalogs/pi-available-models.json).
-   The catalog lists ordered model-routing rules for Shawn's machine. Each rule
-   maps task traits (for example `taskType`, `risk`, `privacy`, and estimated
-   context) to a recommended `modelScenario` and Pi model id. Use only models
-   from this catalog unless the user explicitly supplies another model.
+2. **Read the model-class catalog guidance** before assigning model scenarios.
+   Use abstract `modelClass` values only. The shared class catalog lives in
+   `goal-contract/catalogs/model-classes.json`; project-local
+   `.goal/model-catalog.json` files may provide advisory mapping rules, but
+   they must map task traits to `modelScenario` + `modelClass`, never concrete
+   provider/model ids. Concrete model resolution is runner/harness-only.
 
 3. **Extract candidate tasks from source evidence.** Do not invent content.
    Use the document as the sole source of truth. For each candidate task, note
@@ -159,7 +158,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    - It combines design + implementation + tests + docs in one node.
    - It crosses multiple modules without a clear boundary.
    - A subagent would need a major internal plan before executing.
-   - It requires the strongest model only because scope is too broad.
+   - It requires the strictest model class only because scope is too broad.
    - It cannot be independently verified.
 
    When a node is too large, split it using **candidate decomposition
@@ -209,7 +208,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    final spec. Include a `controller` row for the DAG controller and one row
    per DAG node:
 
-   | target | risk/scope summary | chosen scenario | model | reason |
+   | target | risk/scope summary | chosen scenario | modelClass | reason |
    | --- | --- | --- | --- | --- |
 
    Then write `modelRouting.scenarios`, a dedicated
@@ -217,15 +216,15 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    values, and per-node `modelRationale` into the spec.
 
 10. **Run a model-cost sanity review.** If most leaf implementation nodes
-    require the strongest model, inspect whether:
+    require the strictest model class, inspect whether:
     - Are scan/design/review work types mixed into implementation nodes?
     - Can high-risk decisions be split into a separate review node?
-    - Can docs/tests be split and assigned cheaper models?
+    - Can docs/tests be split and assigned lighter classes?
     - Is the whole DAG genuinely high risk?
 
     Show a cost-tier table (see
     [`references/model-catalog.md`](references/model-catalog.md#model-cost-sanity-review)).
-    If strong models remain justified, record the reason in the trace.
+    If strict classes remain justified, record the reason in the trace.
 
 11. **Ask clarifying questions** when the document is ambiguous:
     - Are nodes A and B parallel, or does B depend on A?
@@ -234,8 +233,8 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
     - What state/artifact does each dependency consume and produce?
     - Is a shortcut/optional node required, or should it be omitted as redundant?
     - Should a node use a different model? (drives `modelScenario`)
-    - Is a cheaper/faster model acceptable for low-risk docs/spec-only nodes?
-    - Does a high-risk or final-audit node require a stronger/long-context model?
+    - Is a lighter model class acceptable for low-risk docs/spec-only nodes?
+    - Does a high-risk or final-audit node require a stricter/long-context model class?
 
 12. **Write the spec to a temp JSON file** and run:
 
@@ -293,10 +292,11 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
   source-grounded `evidence`; unresolved items become node-prefixed
   `openQuestions` and are tracked in the trace.
   Do not use `requiredEvidence` to replace missing deterministic checks.
-- **Do not use models outside the active model catalog.** Declare every chosen
-  model in `modelRouting.scenarios`, then assign each node with `modelScenario`.
-  Omit `modelScenario` only after warning the user that runtime fallback will
-  use `defaultSubagentScenario` or the current Pi session model.
+- **Do not write concrete provider/model ids.** Declare every chosen abstract
+  `modelClass` in `modelRouting.scenarios`, then assign each node with
+  `modelScenario`. Concrete resolution belongs exclusively to goal-runner
+  harness bindings. If the abstract class is unclear, ask the user instead of
+  relying on fallback.
 - **Every `after` edge needs evidence.** Before writing the spec, be able to
   explain what upstream state/artifact the dependent node consumes. Encode that
   state in `consumes` / `produces` and cite the source in `evidence`. If the edge
@@ -335,8 +335,8 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
   high risk, add node-prefixed `openQuestions`, add `human-confirmation` only
   when supported by the active runtime policy, and otherwise require manual
   user review before offering `/goal --dag`. Explain why it could not be split.
-- **If most implementation nodes require the strongest model**, run a
-  model-cost sanity review before finalizing model assignments. If strong
+- **If most implementation nodes require the strictest model class**, run a
+  model-cost sanity review before finalizing model assignments. If strict
   models remain justified, record the reason in the trace.
 
 ## Failure modes

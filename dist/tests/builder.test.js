@@ -448,7 +448,7 @@ test("buildGoalDagFromSpec strips spec-only planning metadata from runtime DAG o
         openQuestions: ["a: Confirm expected acceptance criteria"],
         modelRouting: {
             scenarios: {
-                implementation: { model: "openai-codex/gpt-5.3-codex-spark" },
+                implementation: { modelClass: "implementation" },
             },
             defaultSubagentScenario: "implementation",
         },
@@ -470,14 +470,14 @@ test("buildGoalDagFromSpec strips spec-only planning metadata from runtime DAG o
     assert.doesNotMatch(json, /openQuestions|consumes|produces|evidence|modelRationale|acceptanceCriteria|decompositionRationale|ev-a/);
     assert.equal(validateGoalDagJson(json).nodes[0]?.id, "a");
 });
-test("buildGoalDagPlanningTrace records evidence transitions dependencies and models", () => {
+test("buildGoalDagPlanningTrace records evidence transitions dependencies and model classes", () => {
     const spec = {
         objective: "Ship traceable DAG",
         openQuestions: ["Confirm final validator command"],
         modelRouting: {
             scenarios: {
-                docs: { model: "openai-codex/gpt-5.3-codex-spark", description: "Fast docs/spec work" },
-                review: { model: "deepseek/deepseek-v4-pro", description: "Review work" },
+                docs: { modelClass: "implementation", description: "Fast docs/spec work" },
+                review: { modelClass: "strict-reviewer", description: "Review work" },
             },
             defaultSubagentScenario: "docs",
         },
@@ -511,8 +511,8 @@ test("buildGoalDagPlanningTrace records evidence transitions dependencies and mo
         evidence: ["review-evidence"],
     });
     assert.match(trace.dependencyReview[1]?.whyNotParallel ?? "", /Depends on write-spec/);
-    assert.equal(trace.modelAssignments[0]?.model, "openai-codex/gpt-5.3-codex-spark");
-    assert.equal(trace.modelAssignments[1]?.model, "deepseek/deepseek-v4-pro");
+    assert.equal(trace.modelAssignments[0]?.modelClass, "implementation");
+    assert.equal(trace.modelAssignments[1]?.modelClass, "strict-reviewer");
     assert.deepEqual(trace.openQuestions, ["Confirm final validator command"]);
     assert.doesNotThrow(() => JSON.parse(serializeGoalDagPlanningTrace(trace)));
 });
@@ -582,7 +582,7 @@ test("buildGoalDagFromSpec strips acceptance criteria from runtime DAG output", 
         objective: "x",
         modelRouting: {
             scenarios: {
-                implementation: { model: "openai-codex/gpt-5.3-codex-spark" },
+                implementation: { modelClass: "implementation" },
             },
             defaultSubagentScenario: "implementation",
         },
@@ -675,31 +675,31 @@ test("buildGoalDagFromSpec rejects invalid modelScenario through the runtime par
         objective: "x",
         modelRouting: {
             scenarios: {
-                impl: { model: "openai-codex/gpt-5.3-codex-spark" },
+                impl: { modelClass: "implementation" },
             },
         },
         nodes: [{ id: "a", objective: "a", modelScenario: "missing" }],
     }), /modelScenario.*missing|unknown model scenario|must reference/i);
 });
-test("buildGoalDagFromSpec rejects dot-separated model IDs", () => {
+test("buildGoalDagFromSpec rejects legacy concrete model fields", () => {
     assert.throws(() => buildGoalDagFromSpec({
         objective: "x",
         modelRouting: {
             scenarios: {
-                impl: { model: "openai-codex.gpt-5.5" },
+                impl: { model: "provider/model" },
             },
             defaultSubagentScenario: "impl",
         },
         nodes: [{ id: "a", objective: "a", modelScenario: "impl" }],
-    }), /canonical provider\/model format/);
+    }), /model is unsupported; use modelClass/);
 });
-test("buildGoalDagFromSpec accepts slash-separated model IDs", () => {
+test("buildGoalDagFromSpec accepts modelClass routing", () => {
     const document = buildGoalDagFromSpec({
         objective: "x",
         modelRouting: {
             scenarios: {
-                controller: { model: "openai-codex/gpt-5.5" },
-                spark: { model: "openai-codex/gpt-5.3-codex-spark" },
+                controller: { modelClass: "controller" },
+                spark: { modelClass: "implementation" },
             },
             controllerScenario: "controller",
             defaultSubagentScenario: "spark",
@@ -709,8 +709,8 @@ test("buildGoalDagFromSpec accepts slash-separated model IDs", () => {
             { id: "b", objective: "b", modelScenario: "spark" },
         ],
     });
-    assert.equal(document.modelRouting?.scenarios?.controller?.model, "openai-codex/gpt-5.5");
-    assert.equal(document.modelRouting?.scenarios?.spark?.model, "openai-codex/gpt-5.3-codex-spark");
+    assert.equal(document.modelRouting?.scenarios?.controller?.modelClass, "controller");
+    assert.equal(document.modelRouting?.scenarios?.spark?.modelClass, "implementation");
 });
 test("build-dag CLI accepts the build-dag subcommand", () => {
     // Spawn the compiled CLI the way a shell or Pi would invoke it, and
@@ -940,7 +940,7 @@ test("runtime DAG output individually strips each trace-only field while trace p
         openQuestions: ["Q1: Confirm acceptance criteria"],
         modelRouting: {
             scenarios: {
-                impl: { model: "openai-codex/gpt-5.3-codex-spark" },
+                impl: { modelClass: "implementation" },
             },
             defaultSubagentScenario: "impl",
         },
@@ -1007,9 +1007,9 @@ test("final-verification fixture maps validators evidence and trace correctly", 
         modelRouting: {
             scenarios: {
                 implementation: {
-                    model: "openai-codex/gpt-5.3-codex-spark",
+                    modelClass: "implementation",
                 },
-                review: { model: "deepseek/deepseek-v4-pro" },
+                review: { modelClass: "strict-reviewer" },
             },
             defaultSubagentScenario: "implementation",
         },
@@ -1070,7 +1070,7 @@ test("final-verification fixture maps validators evidence and trace correctly", 
                     forbiddenPaths: ["infra/**", "secrets/**"],
                 },
                 modelScenario: "review",
-                modelRationale: "Review benefits from deepseek reasoning model",
+                modelRationale: "Review benefits from a strict-reviewer model class",
                 acceptanceCriteria: [
                     "No regressions detected",
                     "Coverage >= 80%",
@@ -1120,9 +1120,9 @@ test("final-verification fixture maps validators evidence and trace correctly", 
     assert.match(trace.dependencyReview[1]?.whyNotParallel ?? "", /Depends on write-spec/);
     assert.match(trace.dependencyReview[2]?.whyNotParallel ?? "", /Depends on implement-x/);
     // Model assignments
-    assert.equal(trace.modelAssignments[0]?.model, "openai-codex/gpt-5.3-codex-spark");
-    assert.equal(trace.modelAssignments[1]?.model, "openai-codex/gpt-5.3-codex-spark");
-    assert.equal(trace.modelAssignments[2]?.model, "deepseek/deepseek-v4-pro");
+    assert.equal(trace.modelAssignments[0]?.modelClass, "implementation");
+    assert.equal(trace.modelAssignments[1]?.modelClass, "implementation");
+    assert.equal(trace.modelAssignments[2]?.modelClass, "strict-reviewer");
     // Node quality with acceptanceCriteria
     assert.deepEqual(trace.nodeQuality[0]?.acceptanceCriteria, [
         "Spec covers all PRD requirements",

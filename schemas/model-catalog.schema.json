@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/a5345534/goal-dag/schemas/model-catalog.schema.json",
-  "title": "Goal DAG Model Routing Catalog",
+  "title": "Goal DAG Model Class Catalog",
   "type": "object",
   "additionalProperties": false,
   "required": ["modelRouting"],
@@ -22,10 +22,23 @@
     }
   },
   "$defs": {
+    "conditionScalar": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "number" },
+        { "type": "boolean" }
+      ]
+    },
+    "conditionValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/conditionScalar" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/conditionScalar" } }
+      ]
+    },
     "rule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["when", "modelScenario", "model"],
+      "required": ["when", "modelScenario", "modelClass"],
       "properties": {
         "when": {
           "type": "object",
@@ -33,25 +46,8 @@
           "additionalProperties": { "$ref": "#/$defs/conditionValue" }
         },
         "modelScenario": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 }
+        "modelClass": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$" }
       }
-    },
-    "conditionValue": {
-      "oneOf": [
-        { "$ref": "#/$defs/conditionScalar" },
-        {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/conditionScalar" }
-        }
-      ]
-    },
-    "conditionScalar": {
-      "oneOf": [
-        { "type": "string", "minLength": 1 },
-        { "type": "number" },
-        { "type": "boolean" }
-      ]
     }
   }
 }

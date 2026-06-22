@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseGoalDagFileDocument, SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, CANONICAL_MODEL_ID_PATTERN, } from "goal-contract";
+import { parseGoalDagFileDocument, SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, } from "goal-contract";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
  * graph / model-scenario checks happen later in {@link buildGoalDagFromSpec}
@@ -80,7 +80,6 @@ export function buildGoalDagFromSpec(spec) {
         ...(spec.modelRouting ? { modelRouting: cloneModelRouting(spec.modelRouting) } : {}),
         nodes: spec.nodes.map((node) => cloneNode(node, defaultRisk, defaultWorkspaceStrategy)),
     };
-    assertCanonicalModelIds(draft);
     validateRequiredEvidenceTokens(spec);
     return parseGoalDagFileDocument(draft);
 }
@@ -323,22 +322,6 @@ function validateRequiredEvidenceTokens(spec) {
         }
     }
 }
-function assertCanonicalModelIds(draft) {
-    const invalid = [];
-    for (const [scenarioId, scenario] of Object.entries(draft.modelRouting?.scenarios ?? {})) {
-        if (scenario.model.match(CANONICAL_MODEL_ID_PATTERN))
-            continue;
-        invalid.push({
-            path: `modelRouting.scenarios.${scenarioId}.model`,
-            value: scenario.model,
-        });
-    }
-    if (invalid.length === 0)
-        return;
-    const messages = invalid.map(({ path, value }) => `  ${path}: ${JSON.stringify(value)} — expected canonical provider/model format (e.g. openai-codex/gpt-5.5), NOT provider.model`);
-    throw new Error(`Invalid goal DAG spec: model IDs must use canonical provider/model format:\n` +
-        messages.join("\n"));
-}
 function collectEvidence(spec, warnings) {
     const evidence = [];
     const byNode = new Map();
@@ -449,7 +432,7 @@ function buildModelAssignmentRow(nodeId, spec, node, globalWarnings) {
     const warnings = [];
     const scenario = node?.modelScenario ?? spec.defaults?.modelScenario ?? spec.modelRouting?.defaultSubagentScenario;
     if (!scenario) {
-        const warning = "No explicit modelScenario, defaults.modelScenario, or defaultSubagentScenario; runtime may fall back to the current Pi session model.";
+        const warning = "No explicit modelScenario, defaults.modelScenario, or defaultSubagentScenario; runtime model-class resolution will block unless another routing rule matches.";
         warnings.push(warning);
         globalWarnings.push(`${nodeId}: ${warning}`);
         return {
@@ -458,9 +441,9 @@ function buildModelAssignmentRow(nodeId, spec, node, globalWarnings) {
             warnings,
         };
     }
-    const model = spec.modelRouting?.scenarios?.[scenario]?.model;
+    const modelClass = spec.modelRouting?.scenarios?.[scenario]?.modelClass;
     const description = spec.modelRouting?.scenarios?.[scenario]?.description;
-    if (!model) {
+    if (!modelClass) {
         const warning = `Scenario ${JSON.stringify(scenario)} is not declared in modelRouting.scenarios.`;
         warnings.push(warning);
         globalWarnings.push(`${nodeId}: ${warning}`);
@@ -468,7 +451,7 @@ function buildModelAssignmentRow(nodeId, spec, node, globalWarnings) {
     return {
         nodeId,
         scenario,
-        ...(model ? { model } : {}),
+        ...(modelClass ? { modelClass } : {}),
         reason: node?.modelRationale ?? description ?? `Uses scenario ${scenario}.`,
         ...(warnings.length > 0 ? { warnings } : {}),
     };

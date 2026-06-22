@@ -221,8 +221,8 @@ tarball. Once installed, the agent can run:
 The skill walks the agent through:
 
 1. Reading the document.
-2. Reading the active model catalog (`.goal/model-catalog.json` when present,
-   otherwise `catalogs/pi-available-models.json`).
+2. Reading model-class routing guidance (`goal-contract/catalogs/model-classes.json`
+   and optional project `.goal/model-catalog.json`).
 3. Running a planning-quality pass: evidence table → abstract transition graph
    → recursive decomposition review → node quality review →
    dependency/critical-path review, with a skeptical judge pass for high-risk
@@ -230,28 +230,28 @@ The skill walks the agent through:
 4. Asking clarifying questions about dependencies, conflicts, validators,
    unresolved acceptance handles, redundant shortcut nodes, and model assignment.
 5. Producing a model assignment table and, when most implementation leaves need
-   the strongest model, a model-cost sanity review table.
-6. Writing `modelRouting.scenarios`, a dedicated `controllerScenario`, and
-   per-node `modelScenario` / `modelRationale` into the `GoalDagSpec`.
+   the strictest model class, a model-cost sanity review table.
+6. Writing `modelRouting.scenarios` with abstract `modelClass` values, a
+   dedicated `controllerScenario`, and per-node `modelScenario` /
+   `modelRationale` into the `GoalDagSpec`.
 7. Writing the `GoalDagSpec` JSON with spec-only planning metadata for traceability.
 8. Running the CLI to build a parser-valid DAG file and trace sidecar.
 9. Showing the user the resulting DAG, `nodeQuality` trace warnings/open questions,
    and the exact `/goal --dag <out.dag.json>` handoff command without executing it.
 
-## Model catalog
+## Model-class routing
 
-The package ships a default Pi model-routing catalog at
-[`catalogs/pi-available-models.json`](catalogs/pi-available-models.json). It
-contains ordered `modelRouting.rules` that map task traits (task type, risk,
-privacy, and estimated context) to a recommended `modelScenario` and Pi model id.
+`goal-dag` emits abstract `modelClass` routing only. Concrete provider/model ids
+are intentionally absent from DAGs and traces; `goal-runner` resolves classes
+through harness binding catalogs at runtime and records resolution evidence.
 
-Project-specific overrides should live at `.goal/model-catalog.json`. The skill
-prefers that file when it exists. The catalog's role is to inform LLM judgment;
-the LLM still chooses the final controller and per-node `modelScenario`
-assignments, declares runtime-compatible `modelRouting.scenarios`, sets a
-`controllerScenario`, and shows a model assignment table before writing the DAG.
-If most implementation leaves require the strongest model, the skill runs a
-model-cost sanity review before finalizing the assignments.
+Project-specific advisory rules may live at `.goal/model-catalog.json`. They map
+task traits to `modelScenario` plus `modelClass`, never to concrete models. The
+skill uses those rules to inform LLM judgment, then declares runtime-compatible
+`modelRouting.scenarios`, sets a `controllerScenario`, and shows a model
+assignment table before writing the DAG. If most implementation leaves require
+the strictest class, the skill runs a model-cost sanity review before finalizing
+assignments.
 
 Schema: [`schemas/model-catalog.schema.json`](schemas/model-catalog.schema.json).
 
