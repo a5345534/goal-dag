@@ -1,13 +1,14 @@
 # Architecture decision: why `goal-dag` is a separate repository
 
 > Status: accepted 2026-06-04
-> Applies to: `a5345534/goal-dag` and the Stage 3 goal-runner runtime API surface it depends on
+> Applies to: `a5345534/goal-dag` and the shared `goal-contract` DAG parser/schema surface it depends on
 
 ## Context
 
-The Stage 3 **goal-runner** runtime defines a strict JSON DAG file format that
-`/goal --dag <path>` consumes, and it exports the parser/types used by this
-repository (see [`docs/goal-dag-format.md`](https://github.com/a5345534/goal-runner/blob/main/docs/goal-dag-format.md)).
+The shared **goal-contract** package defines the strict JSON DAG file format
+that Stage 3 **goal-runner** consumes through `/goal --dag <path>`, and it
+exports the parser/types used by this repository (see
+[`docs/goal-dag-format.md`](https://github.com/a5345534/goal-runner/blob/main/docs/goal-dag-format.md)).
 Writing that JSON by hand is error-prone — kebab-case ids, acyclic dependencies,
 model-scenario referential integrity, expected outputs, validation contracts,
 validators, conflict hints — and users who want to drive `/goal` from a
@@ -23,15 +24,16 @@ We considered two designs for closing that gap:
 2. **A Goal DAG producer as a separate package.** The runner would stay a
    consumer of DAG files (parser, validator, scheduler). The producer package
    would own the write side: parsing a spec, composing a draft document,
-   round-tripping it through the runner parser for validation, and writing the
-   file.
+   round-tripping it through the shared contract parser for validation, and
+   writing the file.
 
 ## Decision
 
 We chose (2). `goal-dag` lives in a separate repository
-(`a5345534/goal-dag`), depends on `goal-runner` pinned by git ref, and owns the
-Stage 2 producer side end-to-end. The goal-runner runtime owns the consumer side
-and exposes only:
+(`a5345534/goal-dag`), depends on `goal-contract` pinned by git ref, and owns the
+Stage 2 producer side end-to-end. `goal-contract` owns the parser/schema/types;
+`goal-runner` owns the consumer runtime and execution behavior. The shared
+contract exposes:
 
 - `parseGoalDagFileDocument` — parser + validator (id pattern,
   dependency existence, self-dependency, cycle, model-scenario
@@ -70,36 +72,36 @@ but does not execute it.
   `modelRationale`, `acceptanceCriteria`, `decompositionRationale`, and
   root-level `openQuestions`) is stripped before runtime validation and may be
   emitted separately by `buildGoalDagPlanningTrace()`.
-- The runner parser's checks are the same checks `goal-dag` surfaces to the
-  user before the file is written.
+- The shared contract parser's checks are the same checks `goal-dag` surfaces
+  to the user before the file is written.
 
 ### The dependency surface is small and explicit
 
 ```json
 {
   "dependencies": {
-    "goal-runner": "github:a5345534/goal-runner#8a0f9a00ab9c51142e17eba856a1f757daad1d07"
+    "goal-contract": "github:a5345534/goal-contract#8523c07"
   }
 }
 ```
 
 Pinned to a tag or commit, not a range, so `goal-dag` releases are reproducible
-and the runner runtime's release cadence does not silently pull breaking
-changes into `goal-dag`. The pinned commit is the version-sync proof for the
-Stage 3 parser/schema surface; it includes `validation.allowedPaths`,
-`validation.forbiddenPaths`, and `defaults.thinkingLevel`.
+and shared contract changes do not silently pull breaking parser/schema behavior
+into `goal-dag`. The pinned commit is the version-sync proof for the Stage 3
+parser/schema surface; it includes the abstract `modelClass` routing contract,
+shared model-class catalog, and legacy concrete `model` rejection.
 
 ### The skill is prompt + reference heavy, code-light
 
 - The skill's `SKILL.md` teaches the agent how to extract a
   `GoalDagSpec` from a document (creative work, the LLM's job).
-- The skill reads a model catalog and asks the LLM to assign models
-  based on task objective, scope, risk, validators, context size, and
-  required modalities. This is intentionally LLM judgment, not a hard-coded
-  heuristic.
+- The skill reads model-class guidance and asks the LLM to assign abstract
+  `modelScenario` / `modelClass` values based on task objective, scope, risk,
+  validators, context size, and required modalities. This is intentionally LLM
+  judgment, not a hard-coded concrete-model heuristic.
 - The CLI (`goal-dag build-dag --spec ... --out ... [--trace ...]`) is a
-  thin shell over the spec parser, the runner parser round-trip, and optional
-  trace sidecar generation (mechanical work, deterministic code). It does not
+  thin shell over the spec parser, the shared contract parser round-trip, and
+  optional trace sidecar generation (mechanical work, deterministic code). It does not
   run `/goal`, validators, subagents, worktree creation, implementation edits,
   or OpenSpec source package changes.
 - The `references/` directory has DAG format, model-routing, and
@@ -151,8 +153,8 @@ time.
 │        │ reads                        │ round-trips            │
 │        │                              ▼                        │
 │   ┌────────────┐              ┌─────────────────┐              │
-│   │  Dev doc   │              │  goal-runner    │              │
-│   │  (PRD,     │              │  parser         │              │
+│   │  Dev doc   │              │  goal-contract  │              │
+│   │  (PRD,     │              │  parser/schema  │              │
 │   │  OpenSpec, │              │                 │              │
 │   │  etc.)     │              │                 │              │
 │   └────────────┘              └─────────────────┘              │

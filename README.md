@@ -18,8 +18,9 @@ layer before the runner:
 - A programmatic `GoalDagSpec` builder API.
 - A small CLI: `goal-dag build-dag --spec <in> --out <out> [--trace <trace>]`.
 - A Pi skill (`/skill:goal-dag`) that teaches an agent to extract a
-  spec from a PRD, design doc, or OpenSpec change, assign models from
-  a catalog, and emit a valid DAG file.
+  spec from a PRD, design doc, or OpenSpec change, assign abstract
+  `modelScenario` / `modelClass` routing from shared model-class guidance,
+  and emit a valid DAG file.
 
 goal-contract owns the runtime DAG parser/types/schema for the DAG schema and validation.
 This package only does two things:
@@ -64,11 +65,11 @@ pi update git:github.com/a5345534/goal-dag
 pi update
 ```
 
-The runtime dependency is pinned via `goal-dag`'s own `package.json` to
-`github:a5345534/goal-contract#dc48e42f98e8c585fad8f5f2c94ab42c9cdcca86`, so a
-single install or update brings in the Stage 2 producer plus the Stage 3
-parser/runtime API it validates against. This pin includes the closed
-`requiredEvidence` runtime contract from issue #39.
+The runtime contract dependency is pinned via `goal-dag`'s own `package.json` to
+`github:a5345534/goal-contract#8523c07`, so a single install or update brings in
+the Stage 2 producer plus the Stage 3 DAG parser/schema API it validates
+against. This pin includes the abstract `modelClass` routing contract and rejects
+legacy concrete `model` routing fields.
 
 For a local-development checkout:
 
@@ -170,7 +171,7 @@ in the runtime DAG JSON. Use them to explain dependencies, acceptance criteria,
 decomposition rationale, unresolved node-level questions, and model choices.
 Runtime fields such as `kind`, `validation`, `thinkingLevel`, `workspace`,
 `completionGates`, and `modelScenario` are preserved in the emitted DAG and
-validated by the runner parser.
+validated by the shared `goal-contract` parser.
 
 ## Producer/runtime field guidance
 
@@ -206,8 +207,8 @@ For prose-only acceptance, use `acceptanceCriteria` plus `evidence` and rely on
 - Create or modify OpenSpec source packages.
 - Preserve producer-only trace metadata in the runtime DAG JSON.
 
-Every emitted DAG JSON is validated by the runner parser before it is shown as
-ready for handoff.
+Every emitted DAG JSON is validated by the shared `goal-contract` parser before
+it is shown as ready for handoff.
 
 ## Pi skill
 
@@ -222,7 +223,8 @@ The skill walks the agent through:
 
 1. Reading the document.
 2. Reading model-class routing guidance (`goal-contract/catalogs/model-classes.json`
-   and optional project `.goal/model-catalog.json`).
+   and optional project `.goal/model-catalog.json`, which may contain advisory
+   rules that map task traits to `modelScenario` plus abstract `modelClass`).
 3. Running a planning-quality pass: evidence table → abstract transition graph
    → recursive decomposition review → node quality review →
    dependency/critical-path review, with a skeptical judge pass for high-risk
@@ -318,12 +320,13 @@ to catch stale artifacts at release time.
 The package depends on `goal-contract` via a git ref:
 
 ```json
-"goal-contract": "github:a5345534/goal-contract#dc48e42f98e8c585fad8f5f2c94ab42c9cdcca86"
+"goal-contract": "github:a5345534/goal-contract#8523c07"
 ```
 
 Pin to a tag or commit so `goal-dag` releases are reproducible. The pinned commit
 is the version-sync proof for the Stage 3 parser/schema surface; it includes the
-closed `requiredEvidence` runtime contract from issue #39.
+abstract `modelClass` routing contract, shared model-class catalog, and legacy
+concrete `model` rejection.
 
 - `parseGoalDagFileDocument` (parser + validator)
 - `GoalDagFileDocument`, `GoalDagFileNode`, `GoalDagFileDefaults`,
