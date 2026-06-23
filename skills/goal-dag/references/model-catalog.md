@@ -7,7 +7,7 @@ concrete provider/model ids. Concrete resolution belongs exclusively to
 Authoritative shared catalogs live in `goal-contract`:
 
 - Model classes: `goal-contract/catalogs/model-classes.json`
-- Harness bindings: `goal-contract/catalogs/bindings/<harness>.json` (runtime only)
+- Harness bindings: `goal-runner/catalogs/bindings/<harness>.json` (runtime only)
 - Producer catalog schema: `schemas/model-catalog.schema.json`
 
 Project-local `.goal/model-catalog.json` may provide advisory mapping rules, but

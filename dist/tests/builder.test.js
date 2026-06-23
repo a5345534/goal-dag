@@ -1148,4 +1148,190 @@ test("final-verification fixture maps validators evidence and trace correctly", 
     assert.equal(reparsed.objective, "Ship feature X end-to-end");
     assert.equal(reparsed.nodes.length, 3);
 });
+// ── DAG boundary purity tests ──
+test("DAG JSON boundary purity: contains no concrete provider/model IDs", () => {
+    // Build a rich DAG with modelClass routing, multiple node kinds,
+    // validation contracts, and conflict hints.
+    const spec = {
+        objective: "Boundary purity fixture",
+        modelRouting: {
+            scenarios: {
+                controller: { modelClass: "controller" },
+                implementation: { modelClass: "implementation", description: "General implementation" },
+                review: { modelClass: "strict-reviewer", description: "Review and audit" },
+                collector: { modelClass: "evidence-collector", description: "Source collection" },
+            },
+            controllerScenario: "controller",
+            defaultSubagentScenario: "implementation",
+        },
+        nodes: [
+            {
+                id: "collect-sources",
+                objective: "Collect all source files under src/",
+                modelScenario: "collector",
+                modelRationale: "Source collection benefits from evidence-collector class",
+                outputs: ["src/index.ts", "src/builder.ts"],
+                validators: ["npm test"],
+                conflicts: { files: ["src/collector.ts"] },
+                risk: "low",
+            },
+            {
+                id: "implement-feature",
+                objective: "Implement feature with lint and coverage checks",
+                after: ["collect-sources"],
+                modelScenario: "implementation",
+                kind: "implementation",
+                validation: {
+                    profile: "code-change",
+                    requiredEvidence: ["validators-ran", "implementation-diff-present"],
+                    diffBaseRef: "main",
+                    allowedPaths: ["src/feature/**"],
+                    forbiddenPaths: ["infra/**", "secrets/**"],
+                },
+                validators: ["npm run lint", "npm run coverage"],
+                risk: "medium",
+                thinkingLevel: "high",
+            },
+            {
+                id: "review-feature",
+                objective: "Review implemented feature for regressions",
+                after: ["implement-feature"],
+                modelScenario: "review",
+                kind: "review",
+                validation: {
+                    profile: "code-change",
+                    requiredEvidence: ["validators-ran", "audit-report-present"],
+                    diffBaseRef: "main",
+                },
+                validators: ["npm run audit"],
+                risk: "high",
+                thinkingLevel: "xhigh",
+            },
+        ],
+    };
+    const document = buildGoalDagFromSpec(spec);
+    const json = serializeGoalDagDocument(document);
+    // Re-validate round-trip
+    assert.doesNotThrow(() => validateGoalDagJson(json));
+    // Assert: no concrete provider/model IDs appear anywhere in the JSON.
+    // Concrete model IDs commonly follow the "provider/model" or
+    // "provider/model:version" pattern (e.g. "openai/gpt-4o",
+    // "anthropic/claude-3-opus", "google/gemini-2.5-pro").
+    const concreteModelPattern = /\b(openai|anthropic|google|meta-llama|cohere|mistral|deepseek|qwen)\//;
+    assert.doesNotMatch(json, concreteModelPattern, "serialized DAG JSON must not contain concrete provider/model IDs");
+    // Assert: no raw "model" key in modelRouting scenarios or node-level.
+    // The field must always be "modelClass", never "model".
+    assert.doesNotMatch(json, /"model": "[^"]+\/[^"]+"/);
+    // Assert: modelClass routing uses known abstract class ids only.
+    const foundModelClasses = [...json.matchAll(/"modelClass": "([^"]+)"/g)]
+        .map((m) => m[1]);
+    for (const mc of foundModelClasses) {
+        assert.match(mc, /^(controller|implementation|strict-reviewer|evidence-collector|value-judge|spec-writer)/, `modelClass "${mc}" must be an abstract class from the catalog, not a concrete provider/model id`);
+    }
+});
+test("DAG JSON boundary purity: modelScenario routes to modelClass only", () => {
+    // Build a spec where every node declares an explicit modelScenario
+    // that maps to an abstract modelClass in modelRouting.scenarios.
+    const spec = {
+        objective: "modelScenario → modelClass purity",
+        modelRouting: {
+            scenarios: {
+                spark: { modelClass: "implementation" },
+                audit: { modelClass: "strict-reviewer" },
+            },
+            defaultSubagentScenario: "spark",
+        },
+        nodes: [
+            {
+                id: "docs-only",
+                objective: "Update docs with no code changes",
+                modelScenario: "spark",
+                modelRationale: "Docs-only work fits lightweight implementation class",
+            },
+            {
+                id: "high-scrutiny-review",
+                objective: "Review security-sensitive schema migration",
+                modelScenario: "audit",
+                modelRationale: "Security review requires strict-reviewer scrutiny",
+            },
+            {
+                id: "default-scenario-node",
+                objective: "Use default subagent scenario",
+                // no explicit modelScenario — inherits defaultSubagentScenario
+            },
+        ],
+    };
+    const document = buildGoalDagFromSpec(spec);
+    const json = serializeGoalDagDocument(document);
+    // Re-validate round-trip
+    assert.doesNotThrow(() => validateGoalDagJson(json));
+    // The DAG JSON must reference declared scenarios.
+    assert.match(json, /"modelScenario": "spark"/);
+    assert.match(json, /"modelScenario": "audit"/);
+    // modelRouting.scenarios must contain only modelClass (never model).
+    assert.match(json, /"modelClass": "implementation"/);
+    assert.match(json, /"modelClass": "strict-reviewer"/);
+    assert.doesNotMatch(json, /"scenarios":\s*\{[^}]*"model":\s*"/s, "modelRouting.scenarios must use modelClass, not concrete model");
+    // Verify the document object carries modelScenario → modelClass mapping.
+    for (const node of document.nodes) {
+        if (node.modelScenario) {
+            const scenario = spec.modelRouting.scenarios[node.modelScenario];
+            assert.ok(scenario, `node ${node.id} modelScenario "${node.modelScenario}" must exist in scenarios`);
+            assert.ok(scenario.modelClass, `scenario ${node.modelScenario} must have an abstract modelClass`);
+        }
+    }
+});
+test("DAG JSON boundary purity: rejects concrete model fields at every level", () => {
+    // Scenario-level: model instead of modelClass.
+    assert.throws(() => buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                impl: { model: "openai/gpt-4o" },
+            },
+            defaultSubagentScenario: "impl",
+        },
+        nodes: [{ id: "a", objective: "a", modelScenario: "impl" }],
+    }), /model is unsupported; use modelClass/, "must reject scenario-level concrete model");
+    // Scenario-level: mixed model + modelClass
+    assert.throws(() => buildGoalDagFromSpec({
+        objective: "x",
+        modelRouting: {
+            scenarios: {
+                impl: { modelClass: "implementation", model: "anthropic/claude-3" },
+            },
+            defaultSubagentScenario: "impl",
+        },
+        nodes: [{ id: "a", objective: "a", modelScenario: "impl" }],
+    }), /model is unsupported; use modelClass/, "must reject mixed model + modelClass in scenario");
+    // Catalog-level: concrete model in model-catalog rule (tested in model-catalog.test.ts)
+    // DAG-level: model field on node is structurally impossible because
+    // GoalDagSpecNode only accepts modelScenario, not model. This is enforced
+    // by the TypeScript type and the builder's cloneNode().
+    // Verify a clean DAG built with modelClass-only routing produces
+    // no concrete model keys anywhere.
+    const document = buildGoalDagFromSpec({
+        objective: "clean",
+        modelRouting: {
+            scenarios: {
+                impl: { modelClass: "implementation" },
+            },
+            defaultSubagentScenario: "impl",
+        },
+        nodes: [
+            { id: "a", objective: "a", modelScenario: "impl" },
+            { id: "b", objective: "b", modelScenario: "impl", risk: "high" },
+        ],
+    });
+    const json = serializeGoalDagDocument(document);
+    // Scan the entire serialized JSON for the string pattern "model":
+    // followed by a provider/model path. This is a final safety net.
+    // The only "model" keys should be in modelScenario and modelClass —
+    // never a bare "model" pointing to a concrete id.
+    const bareModelKeys = [...json.matchAll(/"model"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(bareModelKeys.length, 0, `serialized DAG must contain zero bare "model" keys; found: ${bareModelKeys.join(", ")}`);
+    // Confirm the expected routing keys are present.
+    assert.match(json, /"modelClass": "implementation"/);
+    assert.match(json, /"modelScenario": "impl"/);
+});
 //# sourceMappingURL=builder.test.js.map
