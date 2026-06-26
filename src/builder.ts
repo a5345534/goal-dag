@@ -49,6 +49,8 @@ export interface GoalDagSpecNode {
   modelScenario?: string;
   /** Pi thinking level for subagent sessions: off|minimal|low|medium|high|xhigh. */
   thinkingLevel?: string;
+  /** Runtime quality profiles that downstream goal-runner enforces for this node. */
+  qualityProfiles?: GoalDagFileNode["qualityProfiles"];
 
   /** Spec-only planning metadata: states/artifacts this node requires. Stripped from runtime DAG output. */
   consumes?: string[];
@@ -218,6 +220,7 @@ export function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocument {
         conflicts: specDefaults.conflicts,
         modelScenario: specDefaults.modelScenario,
         thinkingLevel: specDefaults.thinkingLevel,
+        qualityProfiles: specDefaults.qualityProfiles,
       })
     : undefined;
 
@@ -350,6 +353,7 @@ function cloneNode(node: GoalDagSpecNode, defaultRisk: GoalDagRisk | undefined, 
   if (node.completionGates) out.completionGates = [...node.completionGates];
   if (node.modelScenario !== undefined) out.modelScenario = node.modelScenario;
   if (node.thinkingLevel !== undefined) out.thinkingLevel = node.thinkingLevel;
+  if (node.qualityProfiles) out.qualityProfiles = [...node.qualityProfiles];
   return out;
 }
 
@@ -392,7 +396,8 @@ function hasRuntimeDefaultContent(defaults: GoalDagFileDefaults): boolean {
     defaults.completionGates !== undefined ||
     defaults.conflicts !== undefined ||
     defaults.modelScenario !== undefined ||
-    defaults.thinkingLevel !== undefined
+    defaults.thinkingLevel !== undefined ||
+    defaults.qualityProfiles !== undefined
   );
 }
 
@@ -405,6 +410,7 @@ function cloneDefaults(defaults: GoalDagFileDefaults): GoalDagFileDefaults {
   if (defaults.conflicts) out.conflicts = cloneConflicts(defaults.conflicts);
   if (defaults.modelScenario !== undefined) out.modelScenario = defaults.modelScenario;
   if (defaults.thinkingLevel !== undefined) out.thinkingLevel = defaults.thinkingLevel;
+  if (defaults.qualityProfiles) out.qualityProfiles = [...defaults.qualityProfiles];
   return out;
 }
 

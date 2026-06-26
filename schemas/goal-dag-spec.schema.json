@@ -54,6 +54,29 @@
         "high"
       ]
     },
+    "qualityProfile": {
+      "type": "string",
+      "enum": [
+        "incremental-implementation",
+        "test-driven-change",
+        "code-review-required",
+        "independent-audit",
+        "security-sensitive-review",
+        "api-contract-change",
+        "database-migration",
+        "docs-required",
+        "observability-required",
+        "ship-preflight"
+      ]
+    },
+    "qualityProfileList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/qualityProfile"
+      }
+    },
     "defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -81,6 +104,9 @@
         "thinkingLevel": {
           "type": "string",
           "minLength": 1
+        },
+        "qualityProfiles": {
+          "$ref": "#/$defs/qualityProfileList"
         },
         "risk": {
           "$ref": "#/$defs/risk"
@@ -148,6 +174,9 @@
         "thinkingLevel": {
           "type": "string",
           "minLength": 1
+        },
+        "qualityProfiles": {
+          "$ref": "#/$defs/qualityProfileList"
         },
         "consumes": {
           "$ref": "#/$defs/nonEmptyStringArray"

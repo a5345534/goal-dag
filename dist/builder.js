@@ -69,6 +69,7 @@ export function buildGoalDagFromSpec(spec) {
             conflicts: specDefaults.conflicts,
             modelScenario: specDefaults.modelScenario,
             thinkingLevel: specDefaults.thinkingLevel,
+            qualityProfiles: specDefaults.qualityProfiles,
         })
         : undefined;
     const draft = {
@@ -185,6 +186,8 @@ function cloneNode(node, defaultRisk, defaultWorkspaceStrategy) {
         out.modelScenario = node.modelScenario;
     if (node.thinkingLevel !== undefined)
         out.thinkingLevel = node.thinkingLevel;
+    if (node.qualityProfiles)
+        out.qualityProfiles = [...node.qualityProfiles];
     return out;
 }
 function defaultWorkspaceBindingForNode(node, defaultWorkspaceStrategy) {
@@ -226,7 +229,8 @@ function hasRuntimeDefaultContent(defaults) {
         defaults.completionGates !== undefined ||
         defaults.conflicts !== undefined ||
         defaults.modelScenario !== undefined ||
-        defaults.thinkingLevel !== undefined);
+        defaults.thinkingLevel !== undefined ||
+        defaults.qualityProfiles !== undefined);
 }
 function cloneDefaults(defaults) {
     const out = {};
@@ -244,6 +248,8 @@ function cloneDefaults(defaults) {
         out.modelScenario = defaults.modelScenario;
     if (defaults.thinkingLevel !== undefined)
         out.thinkingLevel = defaults.thinkingLevel;
+    if (defaults.qualityProfiles)
+        out.qualityProfiles = [...defaults.qualityProfiles];
     return out;
 }
 function cloneConflicts(conflicts) {

@@ -34,6 +34,8 @@ export interface GoalDagSpecNode {
     modelScenario?: string;
     /** Pi thinking level for subagent sessions: off|minimal|low|medium|high|xhigh. */
     thinkingLevel?: string;
+    /** Runtime quality profiles that downstream goal-runner enforces for this node. */
+    qualityProfiles?: GoalDagFileNode["qualityProfiles"];
     /** Spec-only planning metadata: states/artifacts this node requires. Stripped from runtime DAG output. */
     consumes?: string[];
     /** Spec-only planning metadata: states/artifacts this node creates. Stripped from runtime DAG output. */

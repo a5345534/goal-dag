@@ -386,6 +386,29 @@ test("buildGoalDagFromSpec keeps node thinkingLevel overrides alongside defaults
     assert.match(json, /"thinkingLevel": "medium"/);
     assert.match(json, /"thinkingLevel": "xhigh"/);
 });
+test("buildGoalDagFromSpec preserves defaults and node qualityProfiles in runtime DAG", () => {
+    const document = buildGoalDagFromSpec({
+        objective: "quality profile contract",
+        defaults: { qualityProfiles: ["incremental-implementation", "test-driven-change"] },
+        nodes: [
+            { id: "a", objective: "a" },
+            { id: "b", objective: "b", qualityProfiles: ["code-review-required"] },
+        ],
+    });
+    assert.deepEqual(document.defaults?.qualityProfiles, ["incremental-implementation", "test-driven-change"]);
+    assert.equal(document.nodes[0]?.qualityProfiles, undefined);
+    assert.deepEqual(document.nodes[1]?.qualityProfiles, ["code-review-required"]);
+    const parsed = validateGoalDagJson(serializeGoalDagDocument(document));
+    assert.deepEqual(parsed.defaults?.qualityProfiles, ["incremental-implementation", "test-driven-change"]);
+    assert.deepEqual(parsed.nodes[1]?.qualityProfiles, ["code-review-required"]);
+});
+test("buildGoalDagFromSpec rejects unsupported qualityProfiles through the runtime parser", () => {
+    assert.throws(() => buildGoalDagFromSpec({
+        objective: "x",
+        defaults: { qualityProfiles: ["unsupported-profile"] },
+        nodes: [{ id: "a", objective: "a" }],
+    }), /quality profile/);
+});
 test("buildGoalDagFromSpec preserves the user's actual common-module audit use case", () => {
     // Mirrors the real follow-up-plan.spec.json: defaults.risk=high, 11
     // nodes inherit, 1 node overrides with risk=low.
@@ -760,6 +783,8 @@ test("GoalDagSpec schema documents kind validation defaults thinking and spec-on
     assert.ok(validationProperties.allowedPaths, "schema should document validation.allowedPaths");
     assert.ok(validationProperties.forbiddenPaths, "schema should document validation.forbiddenPaths");
     assert.ok(defaultProperties.thinkingLevel, "schema should document defaults.thinkingLevel");
+    assert.ok(defaultProperties.qualityProfiles, "schema should document defaults.qualityProfiles");
+    assert.ok(nodeProperties.qualityProfiles, "schema should document node qualityProfiles");
     assert.ok(nodeProperties.acceptanceCriteria, "schema should document spec-only acceptanceCriteria");
     assert.ok(nodeProperties.decompositionRationale, "schema should document spec-only decompositionRationale");
 });
