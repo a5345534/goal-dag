@@ -239,3 +239,47 @@ Encode only supported runtime fields:
 - Human review requirements → `completionGates` only when supported by the active runtime policy; otherwise warn the user and require manual review before offering `/goal --dag`.
 
 Always build with `--trace <out.trace.json>` for non-trivial DAGs and show trace warnings/open questions before handing the DAG to the goal-runner stage. `goal-dag` itself must not execute `/goal --dag`.
+
+## Quality profiles
+
+`goal-dag` supports the full closed set of quality profiles defined by
+goal-contract. Each profile is a token the producer includes in
+`defaults.qualityProfiles` or per-node `qualityProfiles`.
+
+### Supported profiles
+
+| Profile | Meaning |
+| --- | --- |
+| `incremental-implementation` | Smallest independently verifiable slice; no unrelated cleanup or broad refactors |
+| `test-driven-change` | Tests/validators as first-class evidence; run or explain declared validators before completion |
+| `code-review-required` | Prepare a reviewable diff with verification notes, risks, and reviewer-relevant context |
+| `independent-audit` | Requires an audit gate separate from implementation |
+| `security-sensitive-review` | Security-focused review of changes |
+| `api-contract-change` | Changes affecting API contracts must be reviewed for backward compatibility |
+| `database-migration` | Database schema changes require migration-safe review |
+| `docs-required` | Update or identify required documentation/ADR/operator notes |
+| `observability-required` | Changes must include observability (metrics, logging, tracing) |
+| `ship-preflight` | Pre-release validation gate before deployment |
+| `implementation-discipline` | Karpathy-style disciplined implementation: reduce ambiguity, preserve assumptions/non-goals/success criteria, encode bounded node shape with objective, non-goals, expected outputs, verification, and quality profiles. See [`docs/implementation-discipline-dag-spec.md`](../../docs/implementation-discipline-dag-spec.md) for the full spec. |
+
+### Using quality profiles
+
+- Set broadly applicable profiles on `defaults.qualityProfiles` so all nodes
+  inherit them.
+- Set node-specific profiles on individual nodes to add discipline for
+  particular work types.
+- The runtime de-duplicates profiles before enforcement (first-seen wins).
+- Profiles are closed vocabulary — unsupported tokens are rejected by the
+  runtime parser during round-trip validation.
+
+### Decomposition and review with quality profiles
+
+When a node carries `implementation-discipline`:
+
+- Review whether assumptions and non-goals are explicitly recorded in `scope`.
+- Confirm success criteria are encoded in `acceptanceCriteria`, `validators`,
+  or `outputs`.
+- Check that verification expectations (Think Before Coding, Simplicity First,
+  Surgical Changes, Goal-Driven Verification) are satisfied before marking the
+  node as ready.
+- The node size budget and acceptance handle requirements still apply.

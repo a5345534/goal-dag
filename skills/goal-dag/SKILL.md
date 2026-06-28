@@ -262,6 +262,115 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
     /goal --dag <out.dag.json>
     ```
 
+## Implementation-discipline guidance
+
+When the source document represents a change that carries implementation-discipline
+context (assumptions, non-goals, success criteria, or explicit scope boundaries),
+the producer should apply these rules alongside the general workflow above.
+
+The full implementation-discipline DAG spec is at
+[`docs/implementation-discipline-dag-spec.md`](../../docs/implementation-discipline-dag-spec.md).
+
+### Recommended Node Shape
+
+For nodes that need implementation-discipline context, encode the following
+into each node:
+
+| Aspect | Runtime field | Producer guidance |
+| --- | --- | --- |
+| Concise task outcome | `objective` | State what the node achieves |
+| Non-goals and boundaries | `scope` | Include what the node explicitly should NOT do |
+| Expected artifacts | `outputs` | Files, docs, migrations, or reports |
+| Verification evidence | `validators`, `validation`, `acceptanceCriteria` | Commands, evidence, and path policy |
+| Quality profile | `qualityProfiles` | Include `"implementation-discipline"` when the profile is supported |
+| Risk | `risk` | Set `high` / `medium` when ambiguity or broad blast radius remains |
+
+Add the quality profile `implementation-discipline` to the node or defaults:
+
+```json
+{
+  "defaults": {
+    "qualityProfiles": ["implementation-discipline"]
+  }
+}
+```
+
+### DAG Authoring Rules
+
+#### 1. Think Before Coding
+
+Before emitting nodes, detect material ambiguity:
+
+- Multiple incompatible interpretations of the requested behavior.
+- Missing product/API decisions.
+- Unclear ownership between repositories or packages.
+- Validation requirements that cannot verify the requested outcome.
+- Scope that would force broad unrelated refactors.
+
+If the ambiguity is material, request clarification or mark the handoff as
+not ready. If the ambiguity is minor, record the recommended safe assumption
+in `scope` or validation notes.
+
+#### 2. Simplicity First
+
+Prefer small, directly verifiable nodes. Avoid nodes whose objective implies
+speculative frameworks, broad abstractions, or optional features not requested
+by the source document.
+
+#### 3. Surgical Changes
+
+Constrain scope with the strongest available mechanism:
+
+- `scope` prose for human-readable boundaries — include non-goals and boundaries.
+- `expectedOutputs` for concrete files/artifacts.
+- Validation `allowedPaths` and `forbiddenPaths` when path boundaries are known.
+- Dependencies that prevent unrelated work from being bundled into one node.
+
+#### 4. Goal-Driven Verification
+
+Include verification expectations in each node:
+
+- Bugfix nodes: prefer a reproduction test or equivalent failure evidence
+  before the fix.
+- Implementation nodes: include validators or required evidence whenever
+  feasible.
+
+### Preserving assumptions, non-goals, and success criteria
+
+When the source document contains:
+
+- **Assumptions** — preserve them in the node's `scope` or as spec-only
+  `evidence` so the executor can validate against the same baseline.
+- **Non-goals** — encode explicitly in `scope` so the executor knows what
+  is deliberately excluded.
+- **Success criteria** — encode as `acceptanceCriteria`, `validators`, or
+  `outputs` depending on determinism.
+
+When a node proceeds with a bounded assumption, include it in `scope` or
+validation notes so the controller can answer later subagent questions from
+DAG context.
+
+### Clarification Handoff
+
+When a node proceeds with a bounded assumption rather than requesting
+clarification, document that assumption in the node's `scope` or validation
+notes. This lets the runtime controller answer subagent questions from DAG
+context without re-asking the user.
+
+### Supported quality profiles
+
+`goal-dag` supports all quality profiles defined by `goal-contract`:
+
+```
+incremental-implementation, test-driven-change, code-review-required,
+independent-audit, security-sensitive-review, api-contract-change,
+database-migration, docs-required, observability-required,
+ship-preflight, implementation-discipline
+```
+
+Each profile is a closed vocabulary token. The producer emits them in
+`qualityProfiles` and the runtime enforces the corresponding discipline.
+
 ## Hard rules
 
 - **Do not invent sequential dependencies.** Nodes with no `after` array are

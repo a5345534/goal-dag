@@ -502,6 +502,53 @@ test("buildGoalDagFromSpec rejects unsupported qualityProfiles through the runti
   );
 });
 
+test("buildGoalDagFromSpec accepts implementation-discipline quality profile", () => {
+  // The goal-contract defines implementation-discipline as a supported
+  // quality profile. Verify the builder passes it through in defaults,
+  // on a node, and that it survives round-trip validation.
+  const document = buildGoalDagFromSpec({
+    objective: "implementation discipline test",
+    defaults: {
+      qualityProfiles: ["implementation-discipline"],
+    },
+    nodes: [
+      { id: "a", objective: "a" },
+      {
+        id: "b",
+        objective: "b",
+        qualityProfiles: ["implementation-discipline", "test-driven-change"],
+      },
+    ],
+  });
+  assert.deepEqual(
+    document.defaults?.qualityProfiles,
+    ["implementation-discipline"],
+    "defaults.qualityProfiles must preserve implementation-discipline",
+  );
+  assert.equal(
+    document.nodes[0]?.qualityProfiles,
+    undefined,
+    "node a inherits defaults",
+  );
+  assert.deepEqual(
+    document.nodes[1]?.qualityProfiles,
+    ["implementation-discipline", "test-driven-change"],
+    "node b carries its own qualityProfiles with implementation-discipline",
+  );
+  // Round-trip through serialize + validate
+  const parsed = validateGoalDagJson(serializeGoalDagDocument(document));
+  assert.deepEqual(
+    parsed.defaults?.qualityProfiles,
+    ["implementation-discipline"],
+    "implementation-discipline survives round-trip in defaults",
+  );
+  assert.deepEqual(
+    parsed.nodes[1]?.qualityProfiles,
+    ["implementation-discipline", "test-driven-change"],
+    "implementation-discipline survives round-trip on node",
+  );
+});
+
 test("buildGoalDagFromSpec preserves the user's actual common-module audit use case", () => {
   // Mirrors the real follow-up-plan.spec.json: defaults.risk=high, 11
   // nodes inherit, 1 node overrides with risk=low.

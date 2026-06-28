@@ -66,7 +66,8 @@
         "database-migration",
         "docs-required",
         "observability-required",
-        "ship-preflight"
+        "ship-preflight",
+        "implementation-discipline"
       ]
     },
     "qualityProfileList": {
