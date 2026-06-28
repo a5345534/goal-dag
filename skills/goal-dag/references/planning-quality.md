@@ -126,12 +126,52 @@ A node is too large when:
 - It requires the subagent to discover the real sub-tasks after starting.
 - It cannot be independently verified.
 
+## Validator satisfiability requirement
+
+Validators are executable contracts, not aspirations. Before adding a validator,
+prove that the command can be satisfied by the node's allowed scope and by
+artifacts that exist or are produced upstream.
+
+Rules:
+
+- Do not invent shell validators. Use a validator only when the source document
+  names the command or when the repository already provides the command/artifact
+  relationship.
+- If a validator requires a file, directory, OpenSpec change, generated report,
+  or other artifact that is absent, the DAG must include a source-backed producer
+  node for that artifact, or the same node must be allowed to create it.
+- If `validation.allowedPaths` is present, a node cannot be expected to create or
+  repair artifacts outside those paths. Such requirements must be moved to a
+  different node with a compatible path policy, converted to `acceptanceCriteria`,
+  or raised as a node-prefixed `openQuestions` blocker.
+- OpenSpec validators such as `openspec validate <change>` and
+  `openspec-validate-source-manifest <change>` require
+  `openspec/changes/<change>/` to exist before execution unless the DAG includes
+  an explicit OpenSpec-authoring node whose allowed paths include that directory.
+- A final validation node may run read-only checks across the repository, but it
+  must not require creating missing artifacts that its allowed paths forbid.
+
+Failure examples:
+
+```json
+{
+  "id": "full-validation",
+  "validators": ["openspec validate add-foo --strict"],
+  "validation": {
+    "allowedPaths": ["src/**", "tests/**"]
+  }
+}
+```
+
+This is invalid when `openspec/changes/add-foo/` does not already exist: the
+validator requires an artifact the node is not allowed to create.
+
 ## Acceptance handle requirement
 
 Every node should have at least one acceptance handle:
 
 - `outputs`, when the source supports expected artifacts.
-- `validators`, when the source provides deterministic shell checks.
+- `validators`, when the source provides deterministic shell checks that pass the validator satisfiability requirement above.
 - `acceptanceCriteria`, when the source provides review criteria but no deterministic check.
 - `openQuestions`, when acceptance is unresolved.
 

@@ -178,7 +178,24 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
      offering `/goal --dag`.
    - Do not silently execute it.
 
-7. **Run a node quality review.** Before writing the final spec, show this
+7. **Run a validator satisfiability review.** A validator is not acceptable just
+   because it is a plausible command. Before writing the final spec, prove every
+   validator can execute under the node contract:
+
+   - Do not add validators for artifacts that do not exist unless an upstream
+     node creates them or this node is allowed to create them.
+   - If `validation.allowedPaths` is present, any missing artifact a validator
+     requires must be inside those allowed paths.
+   - OpenSpec validators such as `openspec validate <change>` or
+     `openspec-validate-source-manifest <change>` require
+     `openspec/changes/<change>/` to already exist, or a source-backed node that
+     is allowed to create that directory. Otherwise use `acceptanceCriteria` or
+     a node-prefixed `openQuestions` entry instead of emitting an unexecutable
+     validator.
+   - Never pair a validator that requires `openspec/**` with allowed paths that
+     only permit implementation files unless the OpenSpec change already exists.
+
+8. **Run a node quality review.** Before writing the final spec, show this
    table (see [`references/planning-quality.md`](references/planning-quality.md#node-quality-review-table)):
 
    | node | candidate boundary | acceptance handle | dependency evidence | risk | model implication | refinement action |
@@ -195,7 +212,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    node-prefixed `openQuestions` (`<node-id>: question`). A node without any
    acceptance handle must not be marked low risk.
 
-8. **Run dependency / critical-path review.** Show a dependency review table
+9. **Run dependency / critical-path review.** Show a dependency review table
    with each node's consumed state, produced state, `after` edges, and why it
    cannot run in parallel. For high-risk plans, ambiguous dependency graphs,
    or >6 nodes, run a skeptical judge/consensus pass inspired by
@@ -204,7 +221,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    critical-path bottlenecks. Revise once, then ask the user when evidence
    is still unclear.
 
-9. **Run model assignment.** Produce and show a table before writing the
+10. **Run model assignment.** Produce and show a table before writing the
    final spec. Include a `controller` row for the DAG controller and one row
    per DAG node:
 
@@ -215,7 +232,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
    `modelRouting.controllerScenario`, explicit per-node `modelScenario`
    values, and per-node `modelRationale` into the spec.
 
-10. **Run a model-cost sanity review.** If most leaf implementation nodes
+11. **Run a model-cost sanity review.** If most leaf implementation nodes
     require the strictest model class, inspect whether:
     - Are scan/design/review work types mixed into implementation nodes?
     - Can high-risk decisions be split into a separate review node?
@@ -226,7 +243,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
     [`references/model-catalog.md`](references/model-catalog.md#model-cost-sanity-review)).
     If strict classes remain justified, record the reason in the trace.
 
-11. **Ask clarifying questions** when the document is ambiguous:
+12. **Ask clarifying questions** when the document is ambiguous:
     - Are nodes A and B parallel, or does B depend on A?
     - Which modules / files does each node touch? (drives `conflicts`)
     - Is there a verification command per node? (drives `validators`)
@@ -236,7 +253,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
     - Is a lighter model class acceptable for low-risk docs/spec-only nodes?
     - Does a high-risk or final-audit node require a stricter/long-context model class?
 
-12. **Write the spec to a temp JSON file** and run:
+13. **Write the spec to a temp JSON file** and run:
 
     ```bash
     npx --package=goal-dag goal-dag build-dag \
@@ -252,7 +269,7 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
     `acceptanceCriteria`, `decompositionRationale`) are stripped from the
     runtime DAG and preserved in the trace sidecar.
 
-13. **Show the user the resulting DAG and trace** (objective + node ids +
+14. **Show the user the resulting DAG and trace** (objective + node ids +
     dependency graph + node quality review + dependency review + model
     assignment table + cost-tier table + trace warnings / open questions)
     and the diff vs. the document's intent. Then show the exact Stage 3 handoff

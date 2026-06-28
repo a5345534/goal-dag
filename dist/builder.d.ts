@@ -118,6 +118,10 @@ export interface GoalDagPlanningTraceNodeQuality {
 export interface BuildGoalDagFromSpecFileOptions {
     /** Optional path for the producer-side planning trace sidecar JSON. */
     tracePath?: string;
+    /** Repository/workspace root used for producer-side validator satisfiability checks. Defaults to process.cwd(). */
+    validationCwd?: string;
+    /** Disable filesystem-sensitive validator satisfiability checks. Intended only for tests or offline catalog builds. */
+    skipExecutableValidationCheck?: boolean;
 }
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
@@ -173,4 +177,18 @@ export declare function serializeGoalDagPlanningTrace(trace: GoalDagPlanningTrac
  * the user.
  */
 export declare function validateGoalDagJson(content: string): GoalDagFileDocument;
+/**
+ * Known evidence requirement tokens that the runtime validation runner
+ * can satisfy.  The producer rejects any other value during preflight
+ * with an actionable error that directs the author to use `validators`,
+ * `auditReportPaths`, or `acceptanceCriteria` instead.
+ */
+/**
+ * Producer-side preflight: reject `requiredEvidence` tokens the
+ * runtime cannot act on, and redirect the author to the spec fields
+ * that *are* consumable by the runtime or review process.
+ */
+export declare function validateExecutableValidationContracts(spec: GoalDagSpec, options?: {
+    cwd?: string;
+}): void;
 export type { GoalDagConflictHints, GoalDagFileDefaults, GoalDagFileDocument, GoalDagFileNode, GoalDagNodeWorkspaceBinding, GoalDagRisk, GoalModelRoutingConfig, };

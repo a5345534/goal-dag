@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import {
   parseGoalDagFileDocument,
   SUPPORTED_REQUIRED_EVIDENCE,
@@ -144,6 +145,10 @@ export interface GoalDagPlanningTraceNodeQuality {
 export interface BuildGoalDagFromSpecFileOptions {
   /** Optional path for the producer-side planning trace sidecar JSON. */
   tracePath?: string;
+  /** Repository/workspace root used for producer-side validator satisfiability checks. Defaults to process.cwd(). */
+  validationCwd?: string;
+  /** Disable filesystem-sensitive validator satisfiability checks. Intended only for tests or offline catalog builds. */
+  skipExecutableValidationCheck?: boolean;
 }
 
 /**
@@ -295,6 +300,9 @@ export function buildGoalDagFromSpecFile(
   options: BuildGoalDagFromSpecFileOptions = {},
 ): GoalDagFileDocument {
   const spec = parseGoalDagSpec(readFileSync(specPath, "utf8"));
+  if (!options.skipExecutableValidationCheck) {
+    validateExecutableValidationContracts(spec, { cwd: options.validationCwd ?? process.cwd() });
+  }
   const document = buildGoalDagFromSpec(spec);
   writeFileSync(outPath, serializeGoalDagDocument(document), "utf8");
   if (options.tracePath) {
@@ -466,6 +474,118 @@ function cloneModelRouting(config: GoalModelRoutingConfig): GoalModelRoutingConf
  * runtime cannot act on, and redirect the author to the spec fields
  * that *are* consumable by the runtime or review process.
  */
+export function validateExecutableValidationContracts(
+  spec: GoalDagSpec,
+  options: { cwd?: string } = {},
+): void {
+  const cwd = resolve(options.cwd ?? process.cwd());
+  for (const [nodeIndex, node] of spec.nodes.entries()) {
+    const validators = [...(spec.defaults?.validators ?? []), ...(node.validators ?? [])];
+    if (validators.length === 0) continue;
+    const allowedPaths = node.validation?.allowedPaths ?? [];
+    if (allowedPaths.length === 0) continue;
+
+    for (const validator of validators) {
+      for (const changeName of extractOpenSpecChangeNames(validator)) {
+        const changePath = `openspec/changes/${changeName}`;
+        if (existsSync(resolve(cwd, changePath))) continue;
+        if (isPathAllowedByPatterns(changePath, allowedPaths)) continue;
+        throw new Error(
+          `Invalid goal DAG spec: nodes[${nodeIndex}] (${node.id}) has validator ${JSON.stringify(validator)} ` +
+          `that requires missing OpenSpec change ${JSON.stringify(changePath)}, but validation.allowedPaths excludes it. ` +
+          `Either add an upstream node that creates the change and allow ${JSON.stringify(`${changePath}/**`)}, ` +
+          `or remove/replace the OpenSpec validator with an executable validator or acceptanceCriteria.`,
+        );
+      }
+    }
+  }
+}
+
+function extractOpenSpecChangeNames(command: string): string[] {
+  const tokens = tokenizeCommand(command);
+  const names: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index] ?? "";
+    const directPath = openSpecChangeNameFromPath(token);
+    if (directPath) {
+      pushUnique(names, directPath);
+      continue;
+    }
+
+    const commandName = basename(token);
+    if (commandName === "openspec") {
+      const candidate = nextOpenSpecArgument(tokens, index + 1, new Set(["validate", "check", "lint", "show"]));
+      if (candidate) pushUnique(names, candidate);
+      continue;
+    }
+    if (commandName.startsWith("openspec-validate") || commandName.startsWith("openspec")) {
+      const candidate = nextOpenSpecArgument(tokens, index + 1);
+      if (candidate) pushUnique(names, candidate);
+    }
+  }
+  return names;
+}
+
+function tokenizeCommand(command: string): string[] {
+  const tokens: string[] = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  for (const match of command.matchAll(pattern)) {
+    const token = match[1] ?? match[2] ?? match[3];
+    if (token) tokens.push(token);
+  }
+  return tokens;
+}
+
+function openSpecChangeNameFromPath(token: string): string | undefined {
+  const normalized = normalizePathLike(token);
+  const match = normalized.match(/(?:^|\/)openspec\/changes\/([^/\s]+)/);
+  return match?.[1];
+}
+
+function nextOpenSpecArgument(tokens: string[], startIndex: number, skipWords: Set<string> = new Set()): string | undefined {
+  for (let index = startIndex; index < tokens.length; index += 1) {
+    const token = tokens[index] ?? "";
+    if (!token || token.startsWith("-")) continue;
+    const directPath = openSpecChangeNameFromPath(token);
+    if (directPath) return directPath;
+    if (skipWords.has(token)) continue;
+    if (/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(token)) return token;
+  }
+  return undefined;
+}
+
+function isPathAllowedByPatterns(pathValue: string, patterns: string[]): boolean {
+  const normalizedPath = normalizePathLike(pathValue);
+  return patterns.some((pattern) => pathPatternMatches(normalizedPath, pattern));
+}
+
+function pathPatternMatches(pathValue: string, pattern: string): boolean {
+  const normalizedPattern = normalizePathLike(pattern);
+  if (normalizedPattern === "**" || normalizedPattern === "*") return true;
+  if (normalizedPattern.endsWith("/**")) {
+    const prefix = normalizedPattern.slice(0, -3);
+    return pathValue === prefix || pathValue.startsWith(`${prefix}/`);
+  }
+  if (!normalizedPattern.includes("*")) return pathValue === normalizedPattern;
+  const regex = normalizedPattern
+    .split("**")
+    .map((part) => part.split("*").map(escapeRegex).join("[^/]*"))
+    .join(".*");
+  return new RegExp(`^${regex}$`).test(pathValue);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizePathLike(value: string): string {
+  return value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "");
+}
+
+function pushUnique(values: string[], value: string): void {
+  if (!values.includes(value)) values.push(value);
+}
+
 function validateRequiredEvidenceTokens(spec: GoalDagSpec): void {
   for (const [nodeIndex, node] of spec.nodes.entries()) {
     const evidence = node.validation?.requiredEvidence;

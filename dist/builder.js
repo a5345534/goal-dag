@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { parseGoalDagFileDocument, SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, } from "goal-contract";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
@@ -124,6 +125,9 @@ export function buildGoalDagPlanningTrace(spec, document = buildGoalDagFromSpec(
  */
 export function buildGoalDagFromSpecFile(specPath, outPath, options = {}) {
     const spec = parseGoalDagSpec(readFileSync(specPath, "utf8"));
+    if (!options.skipExecutableValidationCheck) {
+        validateExecutableValidationContracts(spec, { cwd: options.validationCwd ?? process.cwd() });
+    }
     const document = buildGoalDagFromSpec(spec);
     writeFileSync(outPath, serializeGoalDagDocument(document), "utf8");
     if (options.tracePath) {
@@ -312,6 +316,115 @@ function cloneModelRouting(config) {
  * runtime cannot act on, and redirect the author to the spec fields
  * that *are* consumable by the runtime or review process.
  */
+export function validateExecutableValidationContracts(spec, options = {}) {
+    const cwd = resolve(options.cwd ?? process.cwd());
+    for (const [nodeIndex, node] of spec.nodes.entries()) {
+        const validators = [...(spec.defaults?.validators ?? []), ...(node.validators ?? [])];
+        if (validators.length === 0)
+            continue;
+        const allowedPaths = node.validation?.allowedPaths ?? [];
+        if (allowedPaths.length === 0)
+            continue;
+        for (const validator of validators) {
+            for (const changeName of extractOpenSpecChangeNames(validator)) {
+                const changePath = `openspec/changes/${changeName}`;
+                if (existsSync(resolve(cwd, changePath)))
+                    continue;
+                if (isPathAllowedByPatterns(changePath, allowedPaths))
+                    continue;
+                throw new Error(`Invalid goal DAG spec: nodes[${nodeIndex}] (${node.id}) has validator ${JSON.stringify(validator)} ` +
+                    `that requires missing OpenSpec change ${JSON.stringify(changePath)}, but validation.allowedPaths excludes it. ` +
+                    `Either add an upstream node that creates the change and allow ${JSON.stringify(`${changePath}/**`)}, ` +
+                    `or remove/replace the OpenSpec validator with an executable validator or acceptanceCriteria.`);
+            }
+        }
+    }
+}
+function extractOpenSpecChangeNames(command) {
+    const tokens = tokenizeCommand(command);
+    const names = [];
+    for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index] ?? "";
+        const directPath = openSpecChangeNameFromPath(token);
+        if (directPath) {
+            pushUnique(names, directPath);
+            continue;
+        }
+        const commandName = basename(token);
+        if (commandName === "openspec") {
+            const candidate = nextOpenSpecArgument(tokens, index + 1, new Set(["validate", "check", "lint", "show"]));
+            if (candidate)
+                pushUnique(names, candidate);
+            continue;
+        }
+        if (commandName.startsWith("openspec-validate") || commandName.startsWith("openspec")) {
+            const candidate = nextOpenSpecArgument(tokens, index + 1);
+            if (candidate)
+                pushUnique(names, candidate);
+        }
+    }
+    return names;
+}
+function tokenizeCommand(command) {
+    const tokens = [];
+    const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+    for (const match of command.matchAll(pattern)) {
+        const token = match[1] ?? match[2] ?? match[3];
+        if (token)
+            tokens.push(token);
+    }
+    return tokens;
+}
+function openSpecChangeNameFromPath(token) {
+    const normalized = normalizePathLike(token);
+    const match = normalized.match(/(?:^|\/)openspec\/changes\/([^/\s]+)/);
+    return match?.[1];
+}
+function nextOpenSpecArgument(tokens, startIndex, skipWords = new Set()) {
+    for (let index = startIndex; index < tokens.length; index += 1) {
+        const token = tokens[index] ?? "";
+        if (!token || token.startsWith("-"))
+            continue;
+        const directPath = openSpecChangeNameFromPath(token);
+        if (directPath)
+            return directPath;
+        if (skipWords.has(token))
+            continue;
+        if (/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(token))
+            return token;
+    }
+    return undefined;
+}
+function isPathAllowedByPatterns(pathValue, patterns) {
+    const normalizedPath = normalizePathLike(pathValue);
+    return patterns.some((pattern) => pathPatternMatches(normalizedPath, pattern));
+}
+function pathPatternMatches(pathValue, pattern) {
+    const normalizedPattern = normalizePathLike(pattern);
+    if (normalizedPattern === "**" || normalizedPattern === "*")
+        return true;
+    if (normalizedPattern.endsWith("/**")) {
+        const prefix = normalizedPattern.slice(0, -3);
+        return pathValue === prefix || pathValue.startsWith(`${prefix}/`);
+    }
+    if (!normalizedPattern.includes("*"))
+        return pathValue === normalizedPattern;
+    const regex = normalizedPattern
+        .split("**")
+        .map((part) => part.split("*").map(escapeRegex).join("[^/]*"))
+        .join(".*");
+    return new RegExp(`^${regex}$`).test(pathValue);
+}
+function escapeRegex(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function normalizePathLike(value) {
+    return value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "");
+}
+function pushUnique(values, value) {
+    if (!values.includes(value))
+        values.push(value);
+}
 function validateRequiredEvidenceTokens(spec) {
     for (const [nodeIndex, node] of spec.nodes.entries()) {
         const evidence = node.validation?.requiredEvidence;

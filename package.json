@@ -47,7 +47,7 @@
   },
   "homepage": "https://github.com/a5345534/goal-dag#readme",
   "dependencies": {
-    "goal-contract": "github:a5345534/goal-contract#933bb31"
+    "goal-contract": "github:a5345534/goal-contract#3007ad01ffe0746c7e237c745d0f2c30ee421564"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

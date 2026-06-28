@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -221,6 +221,77 @@ test("buildGoalDagFromSpec passes through all supported requiredEvidence tokens"
         "post-merge-validation-ran",
         "audit-report-present",
     ]);
+});
+test("buildGoalDagFromSpecFile rejects missing OpenSpec validators excluded by allowed paths", () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-dag-openspec-missing-"));
+    try {
+        const specPath = join(dir, "spec.json");
+        const outPath = join(dir, "out.dag.json");
+        writeFileSync(specPath, JSON.stringify({
+            objective: "x",
+            nodes: [
+                {
+                    id: "full-validation",
+                    objective: "Run full validation",
+                    validators: ["openspec validate add-repair-plan-schema-minimal-closed-loop --strict"],
+                    validation: { allowedPaths: ["bpmn-drawer/custom/repair/**", "bpmn-drawer/custom/__tests__/**"] },
+                },
+            ],
+        }), "utf8");
+        assert.throws(() => buildGoalDagFromSpecFile(specPath, outPath, { validationCwd: dir }), /requires missing OpenSpec change.*validation\.allowedPaths excludes it/);
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+test("buildGoalDagFromSpecFile allows OpenSpec validators when the change exists", () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-dag-openspec-existing-"));
+    try {
+        const specPath = join(dir, "spec.json");
+        const outPath = join(dir, "out.dag.json");
+        const changeDir = join(dir, "openspec", "changes", "add-repair-plan-schema-minimal-closed-loop");
+        mkdirSync(changeDir, { recursive: true });
+        writeFileSync(join(changeDir, "proposal.md"), "# proposal\n", "utf8");
+        writeFileSync(specPath, JSON.stringify({
+            objective: "x",
+            nodes: [
+                {
+                    id: "full-validation",
+                    objective: "Run full validation",
+                    validators: ["openspec validate add-repair-plan-schema-minimal-closed-loop --strict"],
+                    validation: { allowedPaths: ["bpmn-drawer/custom/repair/**", "bpmn-drawer/custom/__tests__/**"] },
+                },
+            ],
+        }), "utf8");
+        const document = buildGoalDagFromSpecFile(specPath, outPath, { validationCwd: dir });
+        assert.equal(document.nodes[0]?.id, "full-validation");
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+test("buildGoalDagFromSpecFile allows missing OpenSpec validators when allowed paths can create the change", () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-dag-openspec-allowed-"));
+    try {
+        const specPath = join(dir, "spec.json");
+        const outPath = join(dir, "out.dag.json");
+        writeFileSync(specPath, JSON.stringify({
+            objective: "x",
+            nodes: [
+                {
+                    id: "author-and-validate",
+                    objective: "Author and validate OpenSpec change",
+                    validators: ["openspec-validate-source-manifest add-repair-plan-schema-minimal-closed-loop --project-root ."],
+                    validation: { allowedPaths: ["openspec/changes/add-repair-plan-schema-minimal-closed-loop/**"] },
+                },
+            ],
+        }), "utf8");
+        const document = buildGoalDagFromSpecFile(specPath, outPath, { validationCwd: dir });
+        assert.equal(document.nodes[0]?.id, "author-and-validate");
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
 test("buildGoalDagFromSpecFile writes a parser-valid file", () => {
     const dir = mkdtempSync(join(tmpdir(), "goal-dag-"));

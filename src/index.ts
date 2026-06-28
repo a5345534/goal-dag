@@ -4,6 +4,7 @@ export {
   buildGoalDagFromSpec,
   buildGoalDagFromSpecFile,
   buildGoalDagPlanningTrace,
+  validateExecutableValidationContracts,
   validateGoalDagJson,
   serializeGoalDagDocument,
   serializeGoalDagPlanningTrace,
