@@ -683,6 +683,52 @@ test("buildGoalDagPlanningTrace warns on missing acceptance handle", () => {
     assert.ok(acceptanceWarning, "expected acceptance handle warning");
     assert.equal(trace.nodeQuality[0]?.warnings?.length, 1);
 });
+test("buildGoalDagPlanningTrace warns when npm validators lack dependency bootstrap in native-git worktrees", () => {
+    const spec = {
+        objective: "x",
+        defaults: { workspaceStrategy: "native-git-worktree" },
+        nodes: [{ id: "validate", objective: "Validate", validators: ["cd bpmn-drawer && npm run validate"] }],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    const warning = trace.warnings.find((item) => item.includes("dependency bootstrap"));
+    assert.ok(warning, "expected dependency bootstrap warning");
+    assert.match(warning ?? "", /cd bpmn-drawer && npm run validate/);
+    assert.match(trace.nodeQuality[0]?.warnings?.join("\n") ?? "", /fresh native-git worktree/);
+});
+test("buildGoalDagPlanningTrace does not warn when npm validator includes bootstrap", () => {
+    const spec = {
+        objective: "x",
+        defaults: { workspaceStrategy: "native-git-worktree" },
+        nodes: [{ id: "validate", objective: "Validate", validators: ["cd bpmn-drawer && npm ci && npm run validate"] }],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    assert.equal(trace.warnings.some((item) => item.includes("dependency bootstrap")), false);
+    assert.equal(trace.nodeQuality[0]?.warnings, undefined);
+});
+test("buildGoalDagPlanningTrace does not warn when a setup dependency bootstraps dependencies", () => {
+    const spec = {
+        objective: "x",
+        defaults: { workspaceStrategy: "native-git-worktree" },
+        nodes: [
+            {
+                id: "install-dependencies",
+                objective: "Install npm dependencies for bpmn-drawer",
+                produces: ["node dependencies installed"],
+                validators: ["cd bpmn-drawer && npm ci"],
+            },
+            {
+                id: "validate",
+                objective: "Validate",
+                after: ["install-dependencies"],
+                consumes: ["node dependencies installed"],
+                validators: ["cd bpmn-drawer && npm run validate"],
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    assert.equal(trace.warnings.some((item) => item.includes("dependency bootstrap")), false);
+    assert.equal(trace.nodeQuality.find((row) => row.nodeId === "validate")?.warnings, undefined);
+});
 test("buildGoalDagPlanningTrace treats only node-prefixed openQuestions as acceptance handles", () => {
     const unprefixedTrace = buildGoalDagPlanningTrace({
         objective: "x",
@@ -1123,7 +1169,7 @@ test("final-verification fixture maps validators evidence and trace correctly", 
     const spec = {
         objective: "Ship feature X end-to-end",
         defaults: {
-            validators: ["npm test"],
+            validators: ["npm ci && npm test"],
             workspaceStrategy: "native-git-worktree",
         },
         modelRouting: {
@@ -1160,7 +1206,7 @@ test("final-verification fixture maps validators evidence and trace correctly", 
                 after: ["write-spec"],
                 consumes: ["spec-drafted"],
                 produces: ["implementation-done"],
-                validators: ["npm test", "npm run lint"],
+                validators: ["npm ci && npm test", "npm run lint"],
                 risk: "medium",
                 evidence: [
                     "PRD section 3 describes feature X requirements",
@@ -1182,7 +1228,7 @@ test("final-verification fixture maps validators evidence and trace correctly", 
                 after: ["implement-x"],
                 consumes: ["implementation-done"],
                 produces: ["review-complete"],
-                validators: ["npm run audit"],
+                validators: ["npm ci && npm run audit"],
                 kind: "review",
                 validation: {
                     profile: "code-change",
@@ -1205,10 +1251,10 @@ test("final-verification fixture maps validators evidence and trace correctly", 
     const document = buildGoalDagFromSpec(spec);
     assert.equal(document.nodes.length, 3, "all three nodes must be present");
     // Validators mapped correctly to runtime DAG
-    assert.deepEqual(document.defaults?.validators, ["npm test"], "default validators must survive in runtime DAG");
+    assert.deepEqual(document.defaults?.validators, ["npm ci && npm test"], "default validators must survive in runtime DAG");
     assert.deepEqual(document.nodes[0]?.validators, undefined, "write-spec inherits no validators");
-    assert.deepEqual(document.nodes[1]?.validators, ["npm test", "npm run lint"], "implement-x must carry its own validators");
-    assert.deepEqual(document.nodes[2]?.validators, ["npm run audit"], "review-x must carry its own validators");
+    assert.deepEqual(document.nodes[1]?.validators, ["npm ci && npm test", "npm run lint"], "implement-x must carry its own validators");
+    assert.deepEqual(document.nodes[2]?.validators, ["npm ci && npm run audit"], "review-x must carry its own validators");
     // Kind and validation contract in runtime DAG
     assert.equal(document.nodes[2]?.kind, "review");
     assert.equal(document.nodes[2]?.validation?.profile, "code-change");

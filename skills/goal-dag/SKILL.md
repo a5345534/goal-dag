@@ -194,6 +194,13 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
      validator.
    - Never pair a validator that requires `openspec/**` with allowed paths that
      only permit implementation files unless the OpenSpec change already exists.
+   - For fresh `native-git-worktree` execution, validators that call package
+     scripts or test runners (`npm run validate`, `npm test`, `vitest`,
+     `node_modules/.bin/*`, etc.) must include dependency bootstrap such as
+     `npm ci && npm run validate`, or depend on a source-backed setup node that
+     installs/verifies dependencies. If the source does not justify bootstrap,
+     add a node-prefixed `openQuestions` entry instead of emitting a trace-clean
+     validator.
 
 8. **Run a node quality review.** Before writing the final spec, show this
    table (see [`references/planning-quality.md`](references/planning-quality.md#node-quality-review-table)):

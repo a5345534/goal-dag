@@ -148,6 +148,12 @@ Rules:
   `openspec-validate-source-manifest <change>` require
   `openspec/changes/<change>/` to exist before execution unless the DAG includes
   an explicit OpenSpec-authoring node whose allowed paths include that directory.
+- Package-manager/test-runner validators in fresh `native-git-worktree`
+  workspaces must be self-contained. Commands such as `npm run validate`,
+  `npm test`, `vitest`, or `node_modules/.bin/*` assume untracked dependency
+  folders exist; use a bootstrap form such as `npm ci && npm run validate`, add
+  an upstream setup node that produces dependency-ready state, or raise a
+  node-prefixed `openQuestions` entry.
 - A final validation node may run read-only checks across the repository, but it
   must not require creating missing artifacts that its allowed paths forbid.
 

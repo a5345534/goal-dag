@@ -273,7 +273,7 @@ export function buildGoalDagPlanningTrace(
   );
 
   const nodeQuality = document.nodes.map((node) =>
-    buildNodeQualityRow(node.id, spec, nodesById.get(node.id), warnings),
+    buildNodeQualityRow(node.id, spec, nodesById.get(node.id), nodesById, warnings),
   );
 
   return {
@@ -772,6 +772,7 @@ function buildNodeQualityRow(
   nodeId: string,
   spec: GoalDagSpec,
   node: GoalDagSpecNode | undefined,
+  nodesById: Map<string, GoalDagSpecNode>,
   globalWarnings: string[],
 ): GoalDagPlanningTraceNodeQuality {
   const warnings: string[] = [];
@@ -794,12 +795,77 @@ function buildNodeQualityRow(
     globalWarnings.push(`${nodeId}: ${warning}`);
   }
 
+  for (const warning of validatorBootstrapWarnings(spec, node, nodesById)) {
+    warnings.push(warning);
+    globalWarnings.push(`${nodeId}: ${warning}`);
+  }
+
   return {
     nodeId,
     acceptanceCriteria,
     ...(node?.decompositionRationale ? { decompositionRationale: node.decompositionRationale } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
+}
+
+function validatorBootstrapWarnings(
+  spec: GoalDagSpec,
+  node: GoalDagSpecNode | undefined,
+  nodesById: Map<string, GoalDagSpecNode>,
+): string[] {
+  if (!node || !isNativeGitWorktreeNode(spec, node)) return [];
+  const validators = effectiveValidatorsForNode(spec, node);
+  if (validators.length === 0) return [];
+  const packageValidators = validators.filter(isNodePackageValidatorCommand);
+  if (packageValidators.length === 0) return [];
+  if (validators.some(hasDependencyBootstrapCommand)) return [];
+  if (hasDependencyBootstrapPredecessor(node, nodesById)) return [];
+  const commandList = packageValidators.map((command) => JSON.stringify(command)).join(", ");
+  return [
+    `Validator may not be self-contained in a fresh native-git worktree: ${commandList}. ` +
+      `Include dependency bootstrap (for example \"npm ci && npm run validate\"), ` +
+      `add an upstream setup node that installs/verifies dependencies, or add a node-prefixed openQuestions entry.`,
+  ];
+}
+
+function isNativeGitWorktreeNode(spec: GoalDagSpec, node: GoalDagSpecNode): boolean {
+  const strategy = node.workspaceStrategy ?? spec.defaults?.workspaceStrategy;
+  return typeof strategy === "string" && strategy.toLowerCase().includes("native-git");
+}
+
+function effectiveValidatorsForNode(spec: GoalDagSpec, node: GoalDagSpecNode): string[] {
+  return [...(node.validators ?? spec.defaults?.validators ?? [])];
+}
+
+function isNodePackageValidatorCommand(command: string): boolean {
+  const normalized = command.toLowerCase();
+  if (hasDependencyBootstrapCommand(normalized)) return false;
+  return /(?:^|[;&|()\s])(?:npm\s+(?:run\s+[^;&|()\s]+|test|t|exec|x)\b|pnpm\s+(?:run\s+[^;&|()\s]+|test|exec|dlx)\b|yarn\s+(?:run\s+[^;&|()\s]+|test)\b|bun\s+(?:run\s+[^;&|()\s]+|test)\b|npx\s+vitest\b|vitest\b)/i.test(normalized) ||
+    /(?:^|\/)node_modules\/\.bin\//i.test(normalized);
+}
+
+function hasDependencyBootstrapCommand(command: string): boolean {
+  const normalized = command.toLowerCase();
+  return /(?:^|[;&|()\s])(?:npm\s+(?:ci|install|i)\b|pnpm\s+(?:install|i)\b|yarn\s+(?:install|--frozen-lockfile|--immutable)\b|bun\s+install\b)/i.test(normalized);
+}
+
+function hasDependencyBootstrapPredecessor(node: GoalDagSpecNode, nodesById: Map<string, GoalDagSpecNode>): boolean {
+  for (const dependencyId of node.after ?? []) {
+    const dependency = nodesById.get(dependencyId);
+    if (!dependency) continue;
+    const dependencyText = [
+      dependency.objective,
+      dependency.scope,
+      ...(dependency.produces ?? []),
+      ...(dependency.validators ?? []),
+    ].filter((value): value is string => Boolean(value)).join("\n");
+    if (hasDependencyBootstrapCommand(dependencyText) || mentionsDependencyBootstrap(dependencyText)) return true;
+  }
+  return false;
+}
+
+function mentionsDependencyBootstrap(text: string): boolean {
+  return /node_modules|dependenc(?:y|ies)\s+(?:bootstrap|install|installed|ready)|install(?:s|ed|ing)?\s+(?:npm|node|package)?\s*dependenc/i.test(text);
 }
 
 function validatePlanningMetadata(input: unknown, path: string): void {

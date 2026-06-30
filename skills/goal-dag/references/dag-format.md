@@ -88,7 +88,7 @@ producer-friendly rewrite suggestion.
 
 | Source intent | Planner fields | Required evidence / runtime interpretation |
 | --- | --- | --- |
-| Deterministic shell check in source text | `validators` | Pair with `validation.requiredEvidence: ["validators-ran"]` to require runtime execution status. |
+| Deterministic shell check in source text | `validators` | Pair with `validation.requiredEvidence: ["validators-ran"]` to require runtime execution status. For fresh `native-git-worktree` nodes, package validators should include bootstrap, e.g. `npm ci && npm run validate`, or depend on a setup node that installs dependencies. |
 | Audit artifact requirement in source text | `validation.auditReportPaths` | Pair with `validation.requiredEvidence: ["audit-report-present"]` to require path existence checks. |
 | Source scope restrictions | `validation.allowedPaths`, `validation.forbiddenPaths` | No `requiredEvidence` token; the runtime enforces scope directly in validation phase. |
 | Textual/prose acceptance requirement | `acceptanceCriteria` (node), `evidence` (node), optionally root `openQuestions` | Runtime reads spec artifacts; manual trace-based review happens in the planning trace. |
