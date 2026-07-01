@@ -72,6 +72,53 @@ It must not:
 - Create or modify OpenSpec source packages.
 - Preserve producer-only trace metadata in the runtime DAG JSON.
 
+### Publish closeout
+
+`goal-dag` includes an optional **publish closeout** step after Stage 2 output
+validation and before the generated handoff artifacts are presented as ready for
+`goal-runner`. When enabled, closeout:
+
+1. **Tracks run-owned output paths** — the primary `.dag.json` and optional
+   `.trace.json` sidecar from the producer invocation.
+2. **Stages only owned paths** — blocks on unrelated dirty files or ambiguous
+   ownership.
+3. **Creates a closeout commit** — with a deterministic message naming the
+   producer and artifacts.
+4. **Pushes non-force** to the configured GitHub branch.
+5. **Verifies remotely** — confirms the remote branch contains the commit.
+6. **Re-checks worktree cleanliness** — blocks if the worktree is still dirty
+   after the owned commit.
+7. **Fails closed** with actionable diagnostics for missing upstream, detached
+   branch, divergence, push rejection, auth/network failure, remote
+   verification failure, and unrelated dirty files.
+
+Usage from the CLI:
+
+```bash
+npx --package=goal-dag goal-dag build-dag \
+  --spec spec.json --out goal.dag.json \
+  --trace goal.trace.json --closeout
+```
+
+### Explicit non-published mode
+
+For draft workflows or offline work, use `--non-published` to skip commit/push
+closeout. The result is labeled as non-published and not described as default
+runner-ready:
+
+```bash
+npx --package=goal-dag goal-dag build-dag \
+  --spec spec.json --out goal.dag.json \
+  --trace goal.trace.json --non-published
+```
+
+### Stage boundary preservation
+
+Publish closeout ends at durable producer artifacts and a clean worktree.
+`goal-dag` may show the Stage 3 handoff command (`/goal --dag <path>`) but
+must NOT execute it. Closeout does not create worktrees, manage subagents,
+runtime validators, or modification of implementation files.
+
 ## OpenSpec Change Input Contract
 
 When the input path is `openspec/changes/<change-name>/`:

@@ -2,3 +2,5 @@ export { parseGoalDagSpec, parseGoalDagSpecDocument, buildGoalDagFromSpec, build
 export { parseModelCatalogContent, parseModelCatalogDocument, } from "./model-catalog.js";
 export type { ModelCatalog, ModelRoutingCatalogConfig, ModelRoutingCatalogRule, ModelRoutingConditionScalar, ModelRoutingConditionValue, } from "./model-catalog.js";
 export type { GoalDagSpec, GoalDagSpecNode, GoalDagSpecDefaults, GoalDagSpecEvidence, GoalDagSpecEvidenceReference, GoalDagPlanningTrace, GoalDagPlanningTraceDependencyReview, GoalDagPlanningTraceEvidence, GoalDagPlanningTraceModelAssignment, GoalDagPlanningTraceValidatorScopeReview, GoalDagPlanningTraceNodeQuality, GoalDagPlanningTraceTransition, BuildGoalDagFromSpecFileOptions, GoalDagFileDocument, GoalDagFileNode, GoalDagFileDefaults, GoalDagConflictHints, GoalModelRoutingConfig, } from "./builder.js";
+export { runPublishCloseout, } from "./publish-closeout.js";
+export type { CloseoutMode, CloseoutDiagnostic, DiagnosticSeverity, PublishCloseoutResult, OwnedOutputPaths, PublishCloseoutOptions, } from "./publish-closeout.js";
