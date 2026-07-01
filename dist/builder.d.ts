@@ -122,6 +122,10 @@ export interface BuildGoalDagFromSpecFileOptions {
     validationCwd?: string;
     /** Disable filesystem-sensitive validator satisfiability checks. Intended only for tests or offline catalog builds. */
     skipExecutableValidationCheck?: boolean;
+    /** Enable publish closeout after building: stage owned outputs, commit, push, verify. */
+    closeout?: boolean;
+    /** Explicit non-published mode for closeout (skip commit/push, label result). */
+    nonPublished?: boolean;
 }
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
@@ -155,8 +159,8 @@ export declare function buildGoalDagFromSpec(spec: GoalDagSpec): GoalDagFileDocu
 export declare function buildGoalDagPlanningTrace(spec: GoalDagSpec, document?: GoalDagFileDocument): GoalDagPlanningTrace;
 /**
  * Convenience helper: read a spec file, build a validated document, write
- * a pretty-printed DAG JSON to disk, optionally write a planning trace, and
- * return the document.
+ * a pretty-printed DAG JSON to disk, optionally write a planning trace, optionally
+ * perform publish closeout, and return the document.
  */
 export declare function buildGoalDagFromSpecFile(specPath: string, outPath: string, options?: BuildGoalDagFromSpecFileOptions): GoalDagFileDocument;
 /**

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { runPublishCloseout } from "./publish-closeout.js";
 import { parseGoalDagFileDocument, SUPPORTED_REQUIRED_EVIDENCE, SUPPORTED_REQUIRED_EVIDENCE_SET, } from "goal-contract";
 /**
  * Parse a {@link GoalDagSpec} from a JSON string. The deep structural /
@@ -120,8 +121,8 @@ export function buildGoalDagPlanningTrace(spec, document = buildGoalDagFromSpec(
 }
 /**
  * Convenience helper: read a spec file, build a validated document, write
- * a pretty-printed DAG JSON to disk, optionally write a planning trace, and
- * return the document.
+ * a pretty-printed DAG JSON to disk, optionally write a planning trace, optionally
+ * perform publish closeout, and return the document.
  */
 export function buildGoalDagFromSpecFile(specPath, outPath, options = {}) {
     const spec = parseGoalDagSpec(readFileSync(specPath, "utf8"));
@@ -133,6 +134,28 @@ export function buildGoalDagFromSpecFile(specPath, outPath, options = {}) {
     if (options.tracePath) {
         const trace = buildGoalDagPlanningTrace(spec, document);
         writeFileSync(options.tracePath, serializeGoalDagPlanningTrace(trace), "utf8");
+    }
+    // Publish closeout after successful build and output write
+    if (options.closeout || options.nonPublished) {
+        const ownedPaths = {
+            primary: outPath,
+        };
+        if (options.tracePath) {
+            ownedPaths.sidecar = options.tracePath;
+        }
+        const result = runPublishCloseout({
+            ownedPaths,
+            nonPublished: options.nonPublished,
+            cwd: options.validationCwd,
+        });
+        // Log diagnostics to stderr
+        for (const diag of result.diagnostics) {
+            const prefix = diag.severity === "blocker" ? "ERROR" : diag.severity === "warning" ? "WARN" : "INFO";
+            process.stderr.write(`[closeout ${prefix}] ${diag.code}: ${diag.message}\n`);
+        }
+        if (result.mode === "blocked") {
+            throw new Error(`Publish closeout blocked: ${result.diagnostics.filter((d) => d.severity === "blocker").map((d) => d.code).join(", ")}`);
+        }
     }
     return document;
 }

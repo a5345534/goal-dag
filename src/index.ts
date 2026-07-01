@@ -42,3 +42,16 @@ export type {
   GoalDagConflictHints,
   GoalModelRoutingConfig,
 } from "./builder.js";
+
+export {
+  runPublishCloseout,
+} from "./publish-closeout.js";
+
+export type {
+  CloseoutMode,
+  CloseoutDiagnostic,
+  DiagnosticSeverity,
+  PublishCloseoutResult,
+  OwnedOutputPaths,
+  PublishCloseoutOptions,
+} from "./publish-closeout.js";

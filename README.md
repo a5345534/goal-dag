@@ -104,6 +104,35 @@ The CLI is a thin wrapper over `buildGoalDagFromSpecFile()` from
 validators, manage subagents, decide goal completion/blocked, modify
 implementation files, or modify OpenSpec source packages.
 
+### Publish closeout
+
+`goal-dag` includes an optional publish closeout step that validates, stages,
+commits, and non-force pushes owned output artifacts to the configured GitHub
+branch, then verifies the remote contains the commit and checks worktree
+cleanliness:
+
+```bash
+# Build and publish closeout (commit + non-force push + remote verify)
+npx goal-dag build-dag --spec spec.json --out goal.dag.json \
+  --trace goal.trace.json --closeout
+
+# Build with explicit non-published mode (skip commit/push)
+npx goal-dag build-dag --spec spec.json --out goal.dag.json \
+  --trace goal.trace.json --non-published
+```
+
+Closeout blocks with actionable diagnostics for:
+- Unrelated dirty files in the worktree
+- Ambiguous owned path ownership
+- Missing publication remote or upstream
+- Detached HEAD
+- Branch divergence from remote
+- Authentication or network failure
+- Push rejection (branch protection, non-fast-forward)
+- Remote verification failure
+
+`goal-dag` NEVER executes Stage 3 behavior (`/goal --dag`) as part of closeout.
+
 Producer-side schema reference: [`schemas/goal-dag-spec.schema.json`](schemas/goal-dag-spec.schema.json).
 
 ## Programmatic API
@@ -116,7 +145,11 @@ import {
   serializeGoalDagDocument,
   serializeGoalDagPlanningTrace,
   validateGoalDagJson,
+  runPublishCloseout,
   type GoalDagSpec,
+  type OwnedOutputPaths,
+  type PublishCloseoutOptions,
+  type PublishCloseoutResult,
 } from "goal-dag";
 
 const spec: GoalDagSpec = {
@@ -161,6 +194,35 @@ const json = serializeGoalDagDocument(document);      // pretty runtime DAG JSON
 const traceJson = serializeGoalDagPlanningTrace(trace); // pretty trace JSON
 const reparsed = validateGoalDagJson(json);           // smoke check
 ```
+
+### Publish closeout API
+
+After building a DAG output and running validators, call `runPublishCloseout`
+to commit, push, and verify the generated artifacts:
+
+```ts
+import { runPublishCloseout } from "goal-dag";
+
+const result = runPublishCloseout({
+  ownedPaths: { primary: "goal.dag.json", sidecar: "goal.trace.json" },
+  cwd: process.cwd(),
+});
+
+if (result.mode === "published") {
+  console.log(`Published commit ${result.commitSha}`);
+} else if (result.mode === "blocked") {
+  for (const diag of result.diagnostics) {
+    if (diag.severity === "blocker") {
+      console.error(`[${diag.code}] ${diag.message}`);
+    }
+  }
+} else if (result.mode === "non_published") {
+  console.log("Non-published mode: artifacts are local only.");
+}
+```
+
+Optionally, pass `closeout: true` to `buildGoalDagFromSpecFile()` for a
+single-call build+closeout workflow.
 
 For native-git nodes, the builder emits `workspace.worktreeSlug = node.id` when
 omitted. Expected `outputs` are emitted relative to that node workspace root; do
