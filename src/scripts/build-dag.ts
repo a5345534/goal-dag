@@ -25,8 +25,6 @@ function printUsage(): void {
       "  --trace <path>        Optional path to write the planning trace sidecar JSON",
       "  --closeout            Perform publish closeout after building (stage, commit, push)",
       "  --non-published       Explicit non-published mode (no commit/push; labels result)",
-      "  --repo <path>         Repository root for closeout Git operations (default: cwd)",
-      "  --remote <name>       Git remote for closeout push (default: origin)",
       "  -h, --help            Show this help",
       "",
       "Closeout notes:",
