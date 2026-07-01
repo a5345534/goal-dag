@@ -154,8 +154,20 @@ Rules:
   folders exist; use a bootstrap form such as `npm ci && npm run validate`, add
   an upstream setup node that produces dependency-ready state, or raise a
   node-prefixed `openQuestions` entry.
+- Broad/full-repository validators (`npm run validate`, `npm test`, `vitest`,
+  `pytest`, etc.) can expose code/test integration fallout. Do not put them on a
+  docs/OpenSpec-only closeout node whose `validation.allowedPaths` excludes
+  ordinary code/test repair unless an upstream source-backed
+  `post-integration-validation-fix` / `integration-repair` node runs the broad
+  validator with compatible allowed paths.
+- The planning trace records a `validatorScopeReview` row for each node. A
+  `validator-scope-unsatisfiable` warning means the validator may require edits
+  outside the node's mutation scope; broaden the responsible node, add a repair
+  node after implementation fan-in, or replace the validator with
+  `acceptanceCriteria` / node-prefixed `openQuestions`.
 - A final validation node may run read-only checks across the repository, but it
-  must not require creating missing artifacts that its allowed paths forbid.
+  must not require creating missing artifacts or repairing code/test fallout that
+  its allowed paths forbid.
 
 Failure examples:
 
@@ -171,6 +183,27 @@ Failure examples:
 
 This is invalid when `openspec/changes/add-foo/` does not already exist: the
 validator requires an artifact the node is not allowed to create.
+
+A broad validator paired with a docs-only path policy is also trace-warning
+worthy:
+
+```json
+{
+  "id": "final-docs-validation-closeout",
+  "validators": ["cd bpmn-drawer && npm ci && npm run validate"],
+  "validation": {
+    "allowedPaths": [
+      "bpmn-drawer/VERIFICATION.md",
+      "openspec/changes/add-conditional-branch-merge-minimal-closed-loop/**"
+    ]
+  }
+}
+```
+
+The trace reports `validator-scope-unsatisfiable` because the full validator may
+require changing ordinary code/test paths that this node is forbidden to edit.
+Add a prior `post-integration-validation-fix` node with compatible allowed paths
+or move the full validator to the node that can repair failures.
 
 ## Acceptance handle requirement
 

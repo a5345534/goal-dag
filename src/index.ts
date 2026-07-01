@@ -33,6 +33,7 @@ export type {
   GoalDagPlanningTraceDependencyReview,
   GoalDagPlanningTraceEvidence,
   GoalDagPlanningTraceModelAssignment,
+  GoalDagPlanningTraceValidatorScopeReview,
   GoalDagPlanningTraceNodeQuality,
   GoalDagPlanningTraceTransition,
   BuildGoalDagFromSpecFileOptions,

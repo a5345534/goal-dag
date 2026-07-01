@@ -123,6 +123,17 @@ export interface GoalDagPlanningTraceModelAssignment {
   warnings?: string[];
 }
 
+export interface GoalDagPlanningTraceValidatorScopeReview {
+  nodeId: string;
+  validators: string[];
+  broadValidators: string[];
+  allowedPaths: string[];
+  status: "not-applicable" | "compatible" | "warning";
+  scopeSummary: string;
+  repairPredecessors?: string[];
+  warnings?: string[];
+}
+
 export interface GoalDagPlanningTrace {
   version: 1;
   objective: string;
@@ -130,6 +141,7 @@ export interface GoalDagPlanningTrace {
   transitions: GoalDagPlanningTraceTransition[];
   dependencyReview: GoalDagPlanningTraceDependencyReview[];
   modelAssignments: GoalDagPlanningTraceModelAssignment[];
+  validatorScopeReview: GoalDagPlanningTraceValidatorScopeReview[];
   warnings: string[];
   openQuestions: string[];
   nodeQuality: GoalDagPlanningTraceNodeQuality[];
@@ -272,6 +284,10 @@ export function buildGoalDagPlanningTrace(
     buildModelAssignmentRow(node.id, spec, nodesById.get(node.id), warnings),
   );
 
+  const validatorScopeReview = document.nodes.map((node) =>
+    buildValidatorScopeReviewRow(node.id, spec, nodesById.get(node.id), nodesById, warnings),
+  );
+
   const nodeQuality = document.nodes.map((node) =>
     buildNodeQualityRow(node.id, spec, nodesById.get(node.id), nodesById, warnings),
   );
@@ -283,6 +299,7 @@ export function buildGoalDagPlanningTrace(
     transitions,
     dependencyReview,
     modelAssignments,
+    validatorScopeReview,
     nodeQuality,
     warnings,
     openQuestions: [...(spec.openQuestions ?? [])],
@@ -768,6 +785,83 @@ function buildModelAssignmentRow(
   };
 }
 
+function buildValidatorScopeReviewRow(
+  nodeId: string,
+  spec: GoalDagSpec,
+  node: GoalDagSpecNode | undefined,
+  nodesById: Map<string, GoalDagSpecNode>,
+  globalWarnings: string[],
+): GoalDagPlanningTraceValidatorScopeReview {
+  const validators = node ? effectiveValidatorsForNode(spec, node) : [];
+  const broadValidators = validators.filter(isBroadRepositoryValidatorCommand);
+  const allowedPaths = [...(node?.validation?.allowedPaths ?? [])];
+  const repairPredecessors = node ? findCompatibleIntegrationRepairPredecessors(spec, node, nodesById) : [];
+
+  if (!node || validators.length === 0 || broadValidators.length === 0) {
+    return {
+      nodeId,
+      validators,
+      broadValidators,
+      allowedPaths,
+      status: "not-applicable",
+      scopeSummary: "No broad/full-repository validator detected for this node.",
+    };
+  }
+
+  if (allowedPaths.length === 0) {
+    return {
+      nodeId,
+      validators,
+      broadValidators,
+      allowedPaths,
+      status: "compatible",
+      scopeSummary: "No validation.allowedPaths restriction declared; validator repair scope is not narrowed by producer policy.",
+      ...(repairPredecessors.length > 0 ? { repairPredecessors } : {}),
+    };
+  }
+
+  if (allowedPathsAllowCodeOrTests(allowedPaths)) {
+    return {
+      nodeId,
+      validators,
+      broadValidators,
+      allowedPaths,
+      status: "compatible",
+      scopeSummary: "validation.allowedPaths includes ordinary code/test or broad module paths that can repair broad validator fallout.",
+      ...(repairPredecessors.length > 0 ? { repairPredecessors } : {}),
+    };
+  }
+
+  if (repairPredecessors.length > 0) {
+    return {
+      nodeId,
+      validators,
+      broadValidators,
+      allowedPaths,
+      status: "compatible",
+      scopeSummary: "Broad validator is paired with a compatible upstream post-integration validation repair node.",
+      repairPredecessors,
+    };
+  }
+
+  const warning =
+    `validator-scope-unsatisfiable: node ${nodeId} has broad/full-repository validator(s) ` +
+    `${broadValidators.map((command) => JSON.stringify(command)).join(", ")} but validation.allowedPaths ` +
+    `does not include ordinary code/test paths. The validator may require changes outside this node's ` +
+    `allowed mutation scope. Add a post-integration-validation-fix/integration-repair node with compatible ` +
+    `allowedPaths, broaden this node's allowedPaths, or replace the broad validator with acceptanceCriteria/read-only review evidence.`;
+  globalWarnings.push(warning);
+  return {
+    nodeId,
+    validators,
+    broadValidators,
+    allowedPaths,
+    status: "warning",
+    scopeSummary: "Broad validator appears broader than this node's allowed mutation scope.",
+    warnings: [warning],
+  };
+}
+
 function buildNodeQualityRow(
   nodeId: string,
   spec: GoalDagSpec,
@@ -806,6 +900,89 @@ function buildNodeQualityRow(
     ...(node?.decompositionRationale ? { decompositionRationale: node.decompositionRationale } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
+}
+
+function isBroadRepositoryValidatorCommand(command: string): boolean {
+  const normalized = command.toLowerCase();
+  return /(?:^|[;&|()\s])npm\s+(?:run\s+(?:validate(?::[^;&|()\s]+)?|test(?::[^;&|()\s]+)?|check(?::[^;&|()\s]+)?|verify|coverage)|test|t)\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])pnpm\s+(?:run\s+(?:validate(?::[^;&|()\s]+)?|test(?::[^;&|()\s]+)?|check(?::[^;&|()\s]+)?|verify|coverage)|test)\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])yarn\s+(?:run\s+(?:validate(?::[^;&|()\s]+)?|test(?::[^;&|()\s]+)?|check(?::[^;&|()\s]+)?|verify|coverage)|test)\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])bun\s+(?:run\s+(?:validate(?::[^;&|()\s]+)?|test(?::[^;&|()\s]+)?|check(?::[^;&|()\s]+)?|verify|coverage)|test)\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])(?:npx\s+)?vitest\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])pytest\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])go\s+test\s+\.\/\.\.\./i.test(normalized) ||
+    /(?:^|[;&|()\s])cargo\s+test\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])dotnet\s+test\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])mvn\s+(?:test|verify)\b/i.test(normalized) ||
+    /(?:^|[;&|()\s])(?:gradle|\.\/gradlew)\s+(?:test|check)\b/i.test(normalized);
+}
+
+function allowedPathsAllowCodeOrTests(allowedPaths: string[]): boolean {
+  return allowedPaths.some((pattern) => allowedPathAllowsCodeOrTests(pattern));
+}
+
+function allowedPathAllowsCodeOrTests(pattern: string): boolean {
+  const normalized = normalizePathLike(pattern).toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "**" || normalized === "*" || normalized === "**/*") return true;
+  if (isDocumentationOrGovernancePathPattern(normalized)) return false;
+  if (/(^|\/)(?:src|source|lib|app|apps|packages|pkg|server|client|custom|tests?|__tests__|specs?|__mocks__|fixtures?)(?:\/|$|\*\*)/.test(normalized)) {
+    return true;
+  }
+  if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|kts|scala|cs|fs|vb|php|rb|swift|c|cc|cpp|cxx|h|hh|hpp|hxx|vue|svelte|astro|mjs|mts|cts|json|ya?ml|toml|sql|sh|bash|zsh|fish|ps1)(?:$|\*)/.test(normalized)) {
+    return true;
+  }
+  if (normalized.endsWith("/**")) return true;
+  return false;
+}
+
+function isDocumentationOrGovernancePathPattern(normalizedPattern: string): boolean {
+  if (/(^|\/)(?:docs?|documentation|openspec|\.goal-spec)(?:\/|$)/.test(normalizedPattern)) return true;
+  if (/(^|\/)(?:readme|agent_usage|agents|claude|verification|changelog|contributing|license|notice|codeowners)(?:\.[a-z0-9*]+)?$/.test(normalizedPattern)) {
+    return true;
+  }
+  if (/\.(?:md|mdx|txt|rst|adoc|html|css|svg|png|jpe?g|gif|webp|drawio|pdf)(?:$|\*)/.test(normalizedPattern)) {
+    return true;
+  }
+  return false;
+}
+
+function findCompatibleIntegrationRepairPredecessors(
+  spec: GoalDagSpec,
+  node: GoalDagSpecNode,
+  nodesById: Map<string, GoalDagSpecNode>,
+): string[] {
+  const matches: string[] = [];
+  const visited = new Set<string>();
+  const stack = [...(node.after ?? [])];
+  while (stack.length > 0) {
+    const dependencyId = stack.pop();
+    if (!dependencyId || visited.has(dependencyId)) continue;
+    visited.add(dependencyId);
+    const dependency = nodesById.get(dependencyId);
+    if (!dependency) continue;
+    if (isCompatibleIntegrationRepairNode(spec, dependency)) matches.push(dependency.id);
+    stack.push(...(dependency.after ?? []));
+  }
+  return matches;
+}
+
+function isCompatibleIntegrationRepairNode(spec: GoalDagSpec, node: GoalDagSpecNode): boolean {
+  const text = [
+    node.id,
+    node.objective,
+    node.scope,
+    ...(node.produces ?? []),
+    ...(node.acceptanceCriteria ?? []),
+    node.decompositionRationale,
+  ].filter((value): value is string => Boolean(value)).join("\n");
+  if (!/post[-\s]?integration|integration[-\s]?repair|validation[-\s]?repair|repair[-\s]?validation|full[-\s]repo[-\s]?validation/i.test(text)) {
+    return false;
+  }
+  const validators = effectiveValidatorsForNode(spec, node);
+  if (!validators.some(isBroadRepositoryValidatorCommand)) return false;
+  const allowedPaths = node.validation?.allowedPaths ?? [];
+  return allowedPaths.length === 0 || allowedPathsAllowCodeOrTests(allowedPaths);
 }
 
 function validatorBootstrapWarnings(

@@ -201,6 +201,14 @@ Implement the approved OpenSpec change <change-name> slice for fixtures
      installs/verifies dependencies. If the source does not justify bootstrap,
      add a node-prefixed `openQuestions` entry instead of emitting a trace-clean
      validator.
+   - Do not pair broad/full-repository validators (`npm run validate`,
+     `npm test`, `vitest`, `pytest`, etc.) with docs/OpenSpec-only
+     `validation.allowedPaths` unless there is an upstream source-backed
+     `post-integration-validation-fix` / `integration-repair` node that runs the
+     broad validator and has allowed paths covering ordinary code/test repair.
+     Otherwise the trace will report `validator-scope-unsatisfiable`; broaden
+     the responsible node's `allowedPaths`, add the repair node, or replace the
+     validator with `acceptanceCriteria` / node-prefixed `openQuestions`.
 
 8. **Run a node quality review.** Before writing the final spec, show this
    table (see [`references/planning-quality.md`](references/planning-quality.md#node-quality-review-table)):

@@ -729,6 +729,76 @@ test("buildGoalDagPlanningTrace does not warn when a setup dependency bootstraps
     assert.equal(trace.warnings.some((item) => item.includes("dependency bootstrap")), false);
     assert.equal(trace.nodeQuality.find((row) => row.nodeId === "validate")?.warnings, undefined);
 });
+test("buildGoalDagPlanningTrace warns when broad validators exceed docs-only allowedPaths", () => {
+    const spec = {
+        objective: "x",
+        nodes: [
+            {
+                id: "final-docs-validation-closeout",
+                objective: "Validate final docs closeout",
+                validators: ["cd bpmn-drawer && npm ci && npm run validate"],
+                validation: {
+                    allowedPaths: [
+                        "bpmn-drawer/AGENT_USAGE.md",
+                        "bpmn-drawer/custom/pipeline/README.md",
+                        "bpmn-drawer/VERIFICATION.md",
+                        "openspec/changes/add-conditional-branch-merge-minimal-closed-loop/**",
+                    ],
+                },
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    const warning = trace.warnings.find((item) => item.includes("validator-scope-unsatisfiable"));
+    assert.ok(warning, "expected validator scope warning");
+    assert.match(warning ?? "", /final-docs-validation-closeout/);
+    assert.match(warning ?? "", /ordinary code\/test paths/);
+    const row = trace.validatorScopeReview.find((item) => item.nodeId === "final-docs-validation-closeout");
+    assert.equal(row?.status, "warning");
+    assert.deepEqual(row?.broadValidators, ["cd bpmn-drawer && npm ci && npm run validate"]);
+});
+test("buildGoalDagPlanningTrace does not warn when broad validators have compatible allowedPaths", () => {
+    const spec = {
+        objective: "x",
+        nodes: [
+            {
+                id: "validation-repair",
+                objective: "Repair code and tests until full validation passes",
+                validators: ["npm test"],
+                validation: { allowedPaths: ["src/**", "tests/**"] },
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    assert.equal(trace.warnings.some((item) => item.includes("validator-scope-unsatisfiable")), false);
+    assert.equal(trace.validatorScopeReview[0]?.status, "compatible");
+});
+test("buildGoalDagPlanningTrace accepts docs-only audit after compatible integration repair predecessor", () => {
+    const spec = {
+        objective: "x",
+        nodes: [
+            {
+                id: "post-integration-validation-fix",
+                objective: "Post-integration validation repair after implementation fan-in",
+                produces: ["post-integration validation repaired"],
+                validators: ["cd bpmn-drawer && npm ci && npm run validate"],
+                validation: { allowedPaths: ["bpmn-drawer/custom/**", "bpmn-drawer/custom/__tests__/**"] },
+            },
+            {
+                id: "final-docs-validation-closeout",
+                objective: "Validate final docs closeout",
+                after: ["post-integration-validation-fix"],
+                validators: ["cd bpmn-drawer && npm ci && npm run validate"],
+                validation: { allowedPaths: ["bpmn-drawer/VERIFICATION.md", "openspec/changes/add-foo/**"] },
+            },
+        ],
+    };
+    const trace = buildGoalDagPlanningTrace(spec);
+    assert.equal(trace.warnings.some((item) => item.includes("validator-scope-unsatisfiable")), false);
+    const row = trace.validatorScopeReview.find((item) => item.nodeId === "final-docs-validation-closeout");
+    assert.equal(row?.status, "compatible");
+    assert.deepEqual(row?.repairPredecessors, ["post-integration-validation-fix"]);
+});
 test("buildGoalDagPlanningTrace treats only node-prefixed openQuestions as acceptance handles", () => {
     const unprefixedTrace = buildGoalDagPlanningTrace({
         objective: "x",

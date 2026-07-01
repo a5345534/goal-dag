@@ -98,6 +98,16 @@ export interface GoalDagPlanningTraceModelAssignment {
     reason: string;
     warnings?: string[];
 }
+export interface GoalDagPlanningTraceValidatorScopeReview {
+    nodeId: string;
+    validators: string[];
+    broadValidators: string[];
+    allowedPaths: string[];
+    status: "not-applicable" | "compatible" | "warning";
+    scopeSummary: string;
+    repairPredecessors?: string[];
+    warnings?: string[];
+}
 export interface GoalDagPlanningTrace {
     version: 1;
     objective: string;
@@ -105,6 +115,7 @@ export interface GoalDagPlanningTrace {
     transitions: GoalDagPlanningTraceTransition[];
     dependencyReview: GoalDagPlanningTraceDependencyReview[];
     modelAssignments: GoalDagPlanningTraceModelAssignment[];
+    validatorScopeReview: GoalDagPlanningTraceValidatorScopeReview[];
     warnings: string[];
     openQuestions: string[];
     nodeQuality: GoalDagPlanningTraceNodeQuality[];

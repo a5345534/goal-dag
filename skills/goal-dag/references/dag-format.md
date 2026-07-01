@@ -129,6 +129,27 @@ interface GoalDagPlanningTraceNodeQuality {
 }
 ```
 
+It also includes a `validatorScopeReview` array that checks whether broad
+validators can be repaired within each node's mutation policy:
+
+```ts
+interface GoalDagPlanningTraceValidatorScopeReview {
+  nodeId: string;
+  validators: string[];
+  broadValidators: string[];
+  allowedPaths: string[];
+  status: "not-applicable" | "compatible" | "warning";
+  scopeSummary: string;
+  repairPredecessors?: string[];
+  warnings?: string[];
+}
+```
+
+If a broad/full-repository validator such as `npm run validate`, `npm test`,
+`vitest`, or `pytest` appears on a node whose `validation.allowedPaths` excludes
+ordinary code/test paths and no compatible upstream integration-repair node is
+present, the trace emits `validator-scope-unsatisfiable`.
+
 If a node has no `outputs`, `validators`, `acceptanceCriteria`, or node-prefixed `openQuestions`, the trace records this warning:
 
 ```text
