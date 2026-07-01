@@ -693,11 +693,14 @@ function allowedPathAllowsCodeOrTests(pattern) {
     if (/(^|\/)(?:src|source|lib|app|apps|packages|pkg|server|client|custom|tests?|__tests__|specs?|__mocks__|fixtures?)(?:\/|$|\*\*)/.test(normalized)) {
         return true;
     }
-    if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|kts|scala|cs|fs|vb|php|rb|swift|c|cc|cpp|cxx|h|hh|hpp|hxx|vue|svelte|astro|mjs|mts|cts|json|ya?ml|toml|sql|sh|bash|zsh|fish|ps1)(?:$|\*)/.test(normalized)) {
+    if (/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|kts|scala|cs|fs|vb|php|rb|swift|c|cc|cpp|cxx|h|hh|hpp|hxx|vue|svelte|astro|mjs|mts|cts|sql|sh|bash|zsh|fish|ps1)(?:$|\*)/.test(normalized)) {
         return true;
     }
-    if (normalized.endsWith("/**"))
-        return true;
+    if (normalized.endsWith("/**")) {
+        const prefix = normalized.slice(0, -3);
+        const lastSegment = prefix.split("/").pop() ?? prefix;
+        return !["config", "configs", "infra", ".github", "governance", "policy", "policies"].includes(lastSegment);
+    }
     return false;
 }
 function isDocumentationOrGovernancePathPattern(normalizedPattern) {
